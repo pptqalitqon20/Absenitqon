@@ -3,6 +3,9 @@ from telegram.ext import (
     ApplicationBuilder, ContextTypes, CommandHandler,
     CallbackQueryHandler, MessageHandler, filters, ConversationHandler
 )
+import os
+import json
+from oauth2client.service_account import ServiceAccountCredentials
 import gspread
 import io
 from oauth2client.service_account import ServiceAccountCredentials
@@ -16,8 +19,10 @@ import asyncio
 
 # === Setup Google Sheets ===
 scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-creds = ServiceAccountCredentials.from_json_keyfile_name('bamboo-analyst-462502-v8-0d9cdb673ec2.json', scope)
+creds_dict = json.loads(os.environ['GOOGLE_CREDS_JSON'])
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
+
 spreadsheet_id = '1Og7KigH3QL3eTvLLMrIXMq7gaUzqFaw7B1RBL4aMHTo'
 sheet = client.open_by_key(spreadsheet_id).sheet1
 sheet_halaqah_umar = client.open_by_key(spreadsheet_id).worksheet('Halaqah Umar')
