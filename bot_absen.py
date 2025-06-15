@@ -3,6 +3,8 @@ from telegram.ext import (
     ApplicationBuilder, ContextTypes, CommandHandler,
     CallbackQueryHandler, MessageHandler, filters, ConversationHandler
 )
+from fastapi import FastAPI, Request
+import asyncio
 import os
 import json
 from oauth2client.service_account import ServiceAccountCredentials
@@ -17,6 +19,7 @@ from reportlab.lib import colors
 from fastapi import FastAPI, Request
 import asyncio
 
+app = FastAPI()
 # === Setup Google Sheets ===
 scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
 creds_dict = json.loads(os.environ['GOOGLE_CREDS_JSON'])
