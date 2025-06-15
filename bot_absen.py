@@ -38,7 +38,7 @@ santri_terpilih = {}
 app = FastAPI()
 TOKEN = "YOUR_BOT_TOKEN"
 WEBHOOK_URL = "https://your-render-url.onrender.com/webhook"
-application = ApplicationBuilder().token(TOKEN).build()
+app = application = ApplicationBuilder().token(TOKEN).build()
 
 # === Fungsi: Update tanggal & hari ke A2 & B2 ===
 def update_tanggal_dan_hari():
