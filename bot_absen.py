@@ -18,8 +18,8 @@ from reportlab.lib import colors
 
 # === Inisialisasi FastAPI dan Telegram App secara terpisah ===
 fastapi_app = FastAPI()
-TOKEN = "YOUR_BOT_TOKEN"  # Ganti dengan token bot kamu
-WEBHOOK_URL = "https://your-render-url.onrender.com/webhook"  # Ganti dengan URL webhook kamu
+TOKEN = "7948946741:AAFI3qDEhj1g0a79NUHJAWb4QkDGLrCLOrA"  # Ganti dengan token bot kamu
+WEBHOOK_URL = "https://absenitqon.onrender.com/webhook"  # Ganti dengan URL webhook kamu
 application = ApplicationBuilder().token(TOKEN).build()
 
 # === Setup Google Sheets ===
