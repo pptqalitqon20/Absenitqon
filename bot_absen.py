@@ -92,7 +92,7 @@ async def pilih_santri(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return INPUT_HAFALAN
 
 async def simpan_hafalan(update: Update, context: ContextTypes.DEFAULT_TYPE):
-user_id = update.message.from_user.id
+    user_id = update.message.from_user.id
     if user_id not in santri_terpilih:
         await update.message.reply_text("Santri belum dipilih.")
         return ConversationHandler.END
