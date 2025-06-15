@@ -4,5 +4,5 @@ services:
     runtime: python
     region: singapore
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python bot_absen.py"
+    startCommand: "uvicorn bot_absen:app --host 0.0.0.0 --port 10000"
     
