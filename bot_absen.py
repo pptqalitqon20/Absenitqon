@@ -204,10 +204,10 @@ conv_handler = ConversationHandler(
     },
     fallbacks=[],
 )
-application.add_handler(conv_handler)
-application.add_handler(CommandHandler("halaqah", show_halaqah))
-application.add_handler(CommandHandler("pdf", export_pdf))
-application.add_handler(CommandHandler("reset", reset))
+app.add_handler(conv_handler)
+app.add_handler(CommandHandler("halaqah", show_halaqah))
+app.add_handler(CommandHandler("pdf", export_pdf))
+app.add_handler(CommandHandler("reset", reset))
 
 @app.post("/webhook")
 async def webhook(request: Request):
