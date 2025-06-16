@@ -1,1 +1,1 @@
-web: python bot_absen.py
+web:  python bot_absen.py
