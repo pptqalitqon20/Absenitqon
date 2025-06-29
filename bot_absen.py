@@ -1,22 +1,25 @@
+import os
+import json
+import threading
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, ContextTypes, CommandHandler,
     CallbackQueryHandler, MessageHandler, filters, ConversationHandler
 )
-import os
-from flask import Flask
-import json
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
-import io
 from datetime import datetime
 import pytz
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, PageBreak
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
+# === Konfigurasi Token dan Webhook ===
 TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+WEBHOOK_URL = f"https://bot-telegram-02rg.onrender.com/{TOKEN}"
+
+# === Siapkan Bot Telegram ===
 application = ApplicationBuilder().token(TOKEN).build()
 
 # === Setup Google Sheets ===
@@ -33,20 +36,30 @@ sheet_halaqah_umar = client.open_by_key(spreadsheet_id).worksheet('Halaqah Umar'
 PILIH_SANTRI, INPUT_HAFALAN = range(2)
 santri_terpilih = {}
 
+# === Fungsi Waktu Lokal Indonesia ===
 def update_tanggal_dan_hari():
     tz = pytz.timezone('Asia/Makassar')
     now = datetime.now(tz)
-    hari_indo = {'Monday': 'Senin','Tuesday': 'Selasa','Wednesday': 'Rabu','Thursday': 'Kamis','Friday': 'Jumat','Saturday': 'Sabtu','Sunday': 'Ahad'}
-    bulan_indo = {'January': 'Januari','February': 'Februari','March': 'Maret','April': 'April','May': 'Mei','June': 'Juni','July': 'Juli','August': 'Agustus','September': 'September','October': 'Oktober','November': 'November','December': 'Desember'}
+    hari_indo = {
+        'Monday': 'Senin', 'Tuesday': 'Selasa', 'Wednesday': 'Rabu',
+        'Thursday': 'Kamis', 'Friday': 'Jumat', 'Saturday': 'Sabtu', 'Sunday': 'Ahad'
+    }
+    bulan_indo = {
+        'January': 'Januari', 'February': 'Februari', 'March': 'Maret',
+        'April': 'April', 'May': 'Mei', 'June': 'Juni', 'July': 'Juli',
+        'August': 'Agustus', 'September': 'September', 'October': 'Oktober',
+        'November': 'November', 'December': 'Desember'
+    }
     hari = hari_indo[now.strftime('%A')]
     tanggal = now.strftime('%d')
     bulan = bulan_indo[now.strftime('%B')]
     tahun = now.strftime('%Y')
     hasil = f'{hari} {tanggal} {bulan} {tahun}'
-    mapping_baris = {'Monday': 2,'Tuesday': 21,'Wednesday': 40,'Thursday': 59,'Friday': 78}
+    mapping_baris = {'Monday': 2, 'Tuesday': 21, 'Wednesday': 40, 'Thursday': 59, 'Friday': 78}
     baris = mapping_baris.get(now.strftime('%A'), 2)
     sheet_halaqah_umar.update_acell(f'A{baris}', hasil)
 
+# === Handler Awal Bot ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update.message.reply_text(
@@ -54,6 +67,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Selamat datang di Bot Halaqah.\n\n"
         f"Ketik /halaqah untuk melihat daftar halaqah."
     )
+
+application.add_handler(CommandHandler("start", start))
+
+# === Flask Web Server untuk Health Check ===
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
@@ -64,19 +81,21 @@ def home():
 def ping():
     return 'pong'
 
+# === Jalankan Flask Server dan Telegram Webhook ===
 def run_flask():
     flask_app.run(host="0.0.0.0", port=8080)
 
 def main():
+    # Jalankan server Flask di thread terpisah
     threading.Thread(target=run_flask).start()
 
-    application = ApplicationBuilder().token(TOKEN).build()
-application.run_webhook(
-    listen="0.0.0.0",
-    port=int(os.environ.get('PORT', 10000)),  # render akan otomatis pakai ini
-    url_path=TOKEN,
-    webhook_url=f"https://bot-telegram-02rg.onrender.com/{TOKEN}",
-)
+    # Jalankan webhook Telegram
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.environ.get('PORT', 10000)),
+        url_path=TOKEN,
+        webhook_url=WEBHOOK_URL,
+    )
 
 if __name__ == "__main__":
     main()
