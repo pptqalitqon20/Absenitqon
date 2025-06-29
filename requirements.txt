@@ -1,9 +1,6 @@
 python-telegram-bot[webhooks]==20.6
-psycopg2
 flask
 gspread
 oauth2client
 reportlab
-fastapi
-uvicorn
 pytz
