@@ -19,6 +19,22 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 10000; // 10 detik
 
+// Inject session file dari ENV SESSION_B64 (Render)
+if (process.env.SESSION_B64) {
+  const sessionFolder = './auth_info_baileys';
+  const sessionFile = `${sessionFolder}/creds.json`;
+  const fs = require('fs');
+
+  if (!fs.existsSync(sessionFolder)) {
+    fs.mkdirSync(sessionFolder, { recursive: true });
+    console.log('📁 Folder auth_info_baileys dibuat (dari ENV)');
+  }
+
+  const buffer = Buffer.from(process.env.SESSION_B64, 'base64');
+  fs.writeFileSync(sessionFile, buffer);
+  console.log('🔐 Session WhatsApp ditanam dari ENV ✅');
+}
+
 async function startBot() {
   try {
     await initDatabase();
