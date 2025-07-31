@@ -11,7 +11,7 @@ const fs = require('fs');
 // Handler & modul lokal
 const { tanyaAI } = require('./handlers/ai');
 const { setSocketInstance, kirimAyatTestKeGroup } = require('./lib/broadcast_ayat');
-const { initDatabase, getDB } = require('./database');
+
 
 // Reconnect control
 let isReconnecting = false;
@@ -36,15 +36,6 @@ if (process.env.SESSION_B64) {
 }
 
 async function startBot() {
-  try {
-    await initDatabase();
-    getDB();
-    console.log('✅ Database berhasil terhubung!');
-  } catch (err) {
-    console.error('❌ Gagal konek DB:', err);
-    setTimeout(startBot, RECONNECT_INTERVAL);
-    return;
-  }
 
   try {
     const AUTH_FOLDER = './auth_info_baileys';
