@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const { getSystemPrompt } = require('./prompt');
 const axios = require('axios'); // jika pakai CommonJS
 
-const API_KEY = "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"; // Ganti ini
+const API_KEY = process.env.OPENROUTER_API_KEY;
 const MODELS = [
   "tngtech/deepseek-r1t2-chimera:free",
   "meta-llama/llama-3.3-70b-instruct:free",
