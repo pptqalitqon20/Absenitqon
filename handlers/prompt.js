@@ -24,5 +24,16 @@ function getSystemPrompt() {
     + "Selalu jaga akhlak, adab, dan kebijaksanaan dalam setiap jawaban."
   );
 }
-
-module.exports = { getSystemPrompt };
+function getReactionPrompt(text) {
+  return (
+    `Kamu adalah sistem reaksi pesan WhatsApp.\n\n` +
+    `Tugasmu adalah memilih *satu emoji* dari daftar berikut yang paling sesuai untuk diberikan sebagai reaksi terhadap pesan ini:\n` +
+    `\n"${text}"\n\n` +
+    `Pilih hanya dari emoji ini: 👍 ❤️ 😂 😮 😢 😡 🙏\n` +
+    `Balas hanya dengan satu emoji saja.`
+  );
+    }
+module.exports = {
+  getSystemPrompt,
+  getReactionPrompt
+};
