@@ -5,9 +5,9 @@ const { getSystemPrompt, getReactionPrompt } = require('./prompt');
 const API_KEY = process.env.OPENROUTER_API_KEY;
 const MODELS = [
   "tngtech/deepseek-r1t2-chimera:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "qwen/qwen3-235b-a22b-07-25:free",
-  "meta-llama/llama-4-maverick:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-r1:free",
   "google/gemma-3n-e2b-it:free",
   "microsoft/mai-ds-r1:free"
 ];
