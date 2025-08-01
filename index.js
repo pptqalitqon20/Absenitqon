@@ -170,3 +170,8 @@ process.on('unhandledRejection', (err) => {
 
 // 🔃 Jalankan bot
 startBot();
+
+// Trik supaya Render Web Service tidak auto-kill
+require('http').createServer((_, res) => {
+  res.end("Bot WhatsApp aktif!");
+}).listen(process.env.PORT || 3000);
