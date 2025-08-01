@@ -55,7 +55,7 @@ async function tanyaReaksi(userInput) {
           'Authorization': `Bearer ${API_KEY}`,
           'Content-Type': 'application/json'
         },
-        timeout: 10000
+        timeout: 7000
       });
 
       const emoji = response.data.choices?.[0]?.message?.content?.trim();
