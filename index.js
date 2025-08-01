@@ -156,7 +156,7 @@ async function startBot() {
         console.error('❌ Gagal membalas atau memberi reaksi dari AI:', err);
        }
      }
-
+    });
   } catch (err) {
     console.error('❌ Error saat inisialisasi bot:', err);
     console.log(`⏳ Restart otomatis dalam ${RECONNECT_INTERVAL / 1000} detik...`);
