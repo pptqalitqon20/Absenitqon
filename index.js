@@ -148,9 +148,10 @@ async function startBot() {
         const jawaban = await tanyaAI(trimmedText);
         await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
 
-        const emoji = await reaksiAI(trimmedText);
+        const emoji = await tanyaReaksi(trimmedText);
         await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-
+        console.log(`✨ Emoji dikirim: ${emoji}`);
+         
        } catch (err) {
         console.error('❌ Gagal membalas atau memberi reaksi dari AI:', err);
        }
