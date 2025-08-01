@@ -9,7 +9,7 @@ const P = require('pino');
 const fs = require('fs');
 
 // Handler & modul lokal
-const { tanyaAI } = require('./handlers/ai');
+const { tanyaAI, reaksiAI } = require('./handlers/ai');
 const { setSocketInstance, kirimAyatTestKeGroup } = require('./lib/broadcast_ayat');
 
 
@@ -141,17 +141,20 @@ async function startBot() {
         }
         return;
       }
-
-      // 🧠 Tanya AI
+   
+      // 🧠 Tanya AI & beri reaksi emoji
       if (!isGroup || isMentioned || isReplyToBot) {
-        try {
-          const jawaban = await tanyaAI(trimmedText);
-          await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
-        } catch (err) {
-          console.error('❌ Gagal membalas dari AI:', err);
-        }
-      }
-    });
+       try {
+        const jawaban = await tanyaAI(trimmedText);
+        await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+
+        const emoji = await reaksiAI(trimmedText);
+        await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+
+       } catch (err) {
+        console.error('❌ Gagal membalas atau memberi reaksi dari AI:', err);
+       }
+     }
 
   } catch (err) {
     console.error('❌ Error saat inisialisasi bot:', err);
