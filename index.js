@@ -61,7 +61,9 @@ async function startBot() {
       keepAliveIntervalMs: 25000,
       getMessage: async () => null
     });
-
+    
+    globalThis.sock = sock;
+    
     setSocketInstance(sock);
     sock.ev.on('creds.update', saveCreds);
 
@@ -75,6 +77,7 @@ async function startBot() {
         const errorInfo = lastDisconnect?.error;
         console.log('📴 Disconnect detail:', errorInfo);
         const reason = new Boom(errorInfo)?.output?.statusCode;
+        console.log(`📴 Disconnect. Code: ${reason} (${DisconnectReason[reason] || 'Unknown'})`);
 
         if (reason === DisconnectReason.loggedOut) {
           console.log('🧹 Session logout. Menghapus folder auth...');
@@ -174,6 +177,21 @@ process.on('unhandledRejection', (err) => {
 
 // 🔃 Jalankan bot
 startBot();
+
+process.on('SIGTERM', async () => {
+  console.log('👋 SIGTERM diterima. Menutup koneksi WhatsApp...');
+
+  if (globalThis.sock && globalThis.sock.ws?.close) {
+    try {
+      await globalThis.sock.ws.close();
+      console.log('✅ Koneksi WhatsApp ditutup dengan bersih');
+    } catch (err) {
+      console.error('❌ Gagal menutup koneksi:', err);
+    }
+  }
+
+  process.exit(0);
+});
 
 // Trik supaya Render Web Service tidak auto-kill
 require('http').createServer((_, res) => {
