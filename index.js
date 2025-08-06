@@ -11,6 +11,8 @@ const fs = require('fs');
 // Handler & modul lokal
 const { tanyaAI, tanyaReaksi } = require('./handlers/ai');
 const { setSocketInstance, kirimAyatTestKeGroup } = require('./lib/broadcast_ayat');
+const { setSocketInstance, startCronJobs } = require('./lib/broadcast_ayat');
+
 
 
 // Reconnect control
