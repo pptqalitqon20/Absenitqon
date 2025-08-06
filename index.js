@@ -175,8 +175,11 @@ process.on('unhandledRejection', (err) => {
   console.error('🚨 Unhandled Rejection:', err);
 });
 
-// 🔃 Jalankan bot
-startBot();
+(async () => {
+  console.log('⏳ Menunggu 5 detik agar koneksi lama benar-benar mati...');
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  startBot();
+})();
 
 process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM diterima. Menutup koneksi WhatsApp...');
