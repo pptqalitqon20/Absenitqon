@@ -10,7 +10,6 @@ const fs = require('fs');
 
 // Handler & modul lokal
 const { tanyaAI, tanyaReaksi } = require('./handlers/ai');
-const { setSocketInstance, kirimAyatTestKeGroup } = require('./lib/broadcast_ayat');
 const { setSocketInstance, startCronJobs } = require('./lib/broadcast_ayat');
 
 
@@ -135,21 +134,6 @@ async function startBot() {
       const isMentioned = mentionedJids.includes(botNumber);
       const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
 
-      // 🔘 Perintah khusus
-      if (trimmedText === '/tes_ayat') {
-        await kirimAyatTestKeGroup(replyJid);
-        return;
-      }
-
-      if (trimmedText === '/kirim') {
-        try {
-          await handleKirimLaporan(sock, msg);
-        } catch (err) {
-          console.error('❌ Gagal kirim laporan:', err);
-        }
-        return;
-      }
-   
       // 🧠 Tanya AI & beri reaksi emoji
       if (!isGroup || isMentioned || isReplyToBot) {
        try {
