@@ -152,8 +152,8 @@ process.on('unhandledRejection', (err) => {
 
 // Start bot
 (async () => {
-  console.log('⏳ Menunggu 5 detik agar koneksi lama benar-benar mati...');
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  console.log('⏳ Menunggu 10 detik agar koneksi lama benar-benar mati...');
+  await new Promise(resolve => setTimeout(resolve, 10000));
   startBot();
 })();
 
