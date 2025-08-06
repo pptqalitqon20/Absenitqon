@@ -24,7 +24,6 @@ const RECONNECT_INTERVAL = 10000; // 10 detik
 if (process.env.SESSION_B64) {
   const sessionFolder = './auth_info_baileys';
   const sessionFile = `${sessionFolder}/creds.json`;
-  const fs = require('fs');
 
   if (!fs.existsSync(sessionFolder)) {
     fs.mkdirSync(sessionFolder, { recursive: true });
@@ -99,14 +98,17 @@ async function startBot() {
         }
       }
 
+    sock.ev.on('connection.update', ({ connection }) => {
       if (connection === 'open') {
-        console.log('🤖 Bot berhasil tersambung ke WhatsApp!');
-        console.log(`👤 Login sebagai: ${sock.user.id}`);
-        reconnectAttempts = 0;
-        setSocketInstance(sock);
-        startCronJobs();
-      }
-    });
+       console.log('🤖 Bot berhasil tersambung ke WhatsApp!');
+       console.log(`👤 Login sebagai: ${sock.user.id}`);
+       reconnectAttempts = 0;
+       setSocketInstance(sock);
+       console.log('✅ Socket sudah terbuka, mulai cron job...');
+       startCronJobs();
+  }
+});
+
 
     // 📥 Event pesan masuk
     sock.ev.on('messages.upsert', async (m) => {
