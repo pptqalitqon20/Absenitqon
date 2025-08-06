@@ -22,10 +22,12 @@ if (process.env.SESSION_B64) {
   const sessionFolder = './auth_info_baileys';
   const sessionFile = `${sessionFolder}/creds.json`;
 
-  if (!fs.existsSync(sessionFolder)) {
-    fs.mkdirSync(sessionFolder, { recursive: true });
-    console.log('📁 Folder auth_info_baileys dibuat (dari ENV)');
+  if (fs.existsSync(sessionFolder)) {
+    fs.rmSync(sessionFolder, { recursive: true, force: true });
+    console.log('🧹 Folder auth_info_baileys dihapus (untuk overwrite dari ENV)');
   }
+
+  fs.mkdirSync(sessionFolder, { recursive: true });
 
   const buffer = Buffer.from(process.env.SESSION_B64, 'base64');
   fs.writeFileSync(sessionFile, buffer);
