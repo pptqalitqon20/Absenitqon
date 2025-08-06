@@ -102,6 +102,8 @@ async function startBot() {
         console.log('🤖 Bot berhasil tersambung ke WhatsApp!');
         console.log(`👤 Login sebagai: ${sock.user.id}`);
         reconnectAttempts = 0;
+        setSocketInstance(sock);
+        startCronJobs();
       }
     });
 
