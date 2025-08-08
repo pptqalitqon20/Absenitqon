@@ -123,12 +123,13 @@ async function startBot() {
       const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
       const isMentioned = mentionedJids.includes(botNumber);
       const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
+      let handled = false;
       try {
-        const handled = await handleUjianWA(msg, sock);
-        if (handled) return; // Hentikan jika sudah ditangani oleh handleUjianWA
+        handled = await handleUjianWA(msg, sock);
       } catch (e) {
         console.error('❌ Gagal handle pesan ujian:', e);
       }
+      if (handled) return; // ⛔️ HENTIKAN DI SINI
 
       if (!isGroup || isMentioned || isReplyToBot) {
         try {
