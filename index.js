@@ -54,7 +54,7 @@ async function handleUjianWA(message, sock) {
   const sender = message.key.remoteJid;
   const text = extractText(message);
 
-  if (text.startsWith("Ujian -")) {
+  if (text.toLowerCase().startsWith("ujian -")) {
     const [, nama, jenis, juz, keterangan] = text.split(" - ");
     const res = await axios.post(ujianAPI, {
       mode: "simpan", nama, jenis, juz, keterangan
@@ -63,7 +63,7 @@ async function handleUjianWA(message, sock) {
     return true;
   }
 
-  if (text.startsWith("Edit -")) {
+   if (text.toLowerCase().startsWith("Edit -")) {
     const [, nama, jenis, juz, keterangan] = text.split(" - ");
     const res = await axios.post(ujianAPI, {
       mode: "edit", nama, jenis, juz, keterangan
@@ -72,13 +72,13 @@ async function handleUjianWA(message, sock) {
     return true;
   }
 
-  if (text.startsWith("Lihat")) {
+   if (text.toLowerCase().startsWith("Lihat")) {
   let nama = null;
   if (text.includes(" - ")) {
     [, nama] = text.split(" - ");
   }
 
-  const res = await axios.post(url, {
+  const res = await axios.post(ujianAPI, {
     mode: "lihat",
     nama
   });
