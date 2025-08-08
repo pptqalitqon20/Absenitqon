@@ -196,12 +196,18 @@ async function startBot() {
     '';
 
       const trimmedText = typeof text === 'string' ? text.trim() : '';
+      console.log('💬 Teks pesan:', trimmedText);
 
   // ✅ Deteksi JID bot (format pasti)
       const botNumber = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
       const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
       const isMentioned = mentionedJids.includes(botNumber);
       const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
+      console.log('🤖 Bot Number:', botNumber);
+      console.log('📋 mentionedJids:', mentionedJids);
+      console.log('👤 participant:', participant);
+      console.log('📌 isMentioned:', isMentioned);
+      console.log('📌 isReplyToBot:', isReplyToBot);
 
       try {
     // ✅ Deteksi apakah ini perintah khusus ujian
@@ -209,12 +215,14 @@ async function startBot() {
 
     // 📌 PRIORITAS PERINTAH
         if (isCommand) {
+          console.log('⚡ Deteksi perintah khusus:', trimmedText);
           const handled = await handleUjianWA(msg, sock);
           if (handled) return; // Stop kalau sudah ditangani
       }
 
     // 📌 MODE PRIVATE → selalu jawab
     if (!isGroup) {
+      console.log('📥 Mode Private → AI jawab');
       const jawaban = await tanyaAI(trimmedText);
       await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
 
@@ -233,6 +241,7 @@ async function startBot() {
 
     // 📌 MODE GRUP → hanya jawab kalau di-mention atau di-reply
     if (isGroup && (isMentioned || isReplyToBot)) {
+      console.log('📥 Mode Grup (Mention/Reply) → AI jawab');
       const jawaban = await tanyaAI(trimmedText);
       await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
 
