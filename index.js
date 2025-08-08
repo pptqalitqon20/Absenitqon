@@ -174,35 +174,58 @@ async function startBot() {
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
-      const msg = messages[0];
-      if (!msg.message || msg.key.fromMe) return;
+     const msg = messages[0];
+     if (!msg.message || msg.key.fromMe) return;
 
-      const isGroup = msg.key.remoteJid.endsWith('@g.us');
-      const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
-      const replyJid = isGroup ? msg.key.remoteJid : senderJid;
+     const isGroup = msg.key.remoteJid.endsWith('@g.us');
+     const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
+     const replyJid = isGroup ? msg.key.remoteJid : senderJid;
 
-      const text = extractText(msg);
-      const botNumber = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
-      const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      const isMentioned = mentionedJids.includes(botNumber);
-      const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
+     const text = extractText(msg);
+  
+  // ✅ Deteksi JID bot yang fleksibel
+     const botJid = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
+     const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+     const isMentioned = mentionedJids.some(jid => jid.includes(botJid));
+     const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant?.includes(botJid);
 
-      if (!isGroup || isMentioned || isReplyToBot) {
-       try {
-         const handled = await handleUjianWA(msg, sock);
-         if (handled) return; // ✅ Stop kalau sudah ditangani
+     try {
+    // ✅ Deteksi apakah ini perintah khusus ujian
+       const isCommand = /^ujian\s-|^edit\s-|^lihat/i.test(text);
 
-         const jawaban = await tanyaAI(text);
-         await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+    // 📌 PRIORITAS PERINTAH
+     if (isCommand) {
+      const handled = await handleUjianWA(msg, sock);
+      if (handled) return; // Stop kalau sudah ditangani
+    }
 
-         const emoji = await tanyaReaksi(text);
-         await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-         console.log(`✨ Emoji dikirim: ${emoji}`);
-       } catch (err) {
-         console.error('❌ Gagal membalas/reaksi:', err);
+    // 📌 MODE GRUP
+     if (isGroup) {
+      if (isMentioned || isReplyToBot) {
+        // Kalau bukan perintah khusus → AI yang jawab
+        if (!isCommand) {
+          const jawaban = await tanyaAI(text);
+          await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+
+          const emoji = await tanyaReaksi(text);
+          await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+          console.log(`✨ Emoji dikirim: ${emoji}`);
+        }
       }
-   }
-    });
+    } else {
+      // 📌 MODE PRIVATE CHAT → AI jawab semua
+      const jawaban = await tanyaAI(text);
+      await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+
+      const emoji = await tanyaReaksi(text);
+      await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+      console.log(`✨ Emoji dikirim: ${emoji}`);
+    }
+
+  } catch (err) {
+    console.error('❌ Gagal membalas/reaksi:', err);
+  }
+});
 
   } catch (err) {
     console.error('❌ Error saat inisialisasi bot:', err);
