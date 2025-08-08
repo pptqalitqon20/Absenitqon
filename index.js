@@ -213,33 +213,46 @@ async function startBot() {
           if (handled) return; // Stop kalau sudah ditangani
       }
 
-    // 📌 MODE GRUP → Hanya respon kalau di-mention atau di-reply
-        if (isGroup) {
-          if (isMentioned || isReplyToBot) {
-            if (!isCommand) {
-              const jawaban = await tanyaAI(trimmedText);
-              await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+    // 📌 MODE PRIVATE → selalu jawab
+    if (!isGroup) {
+      const jawaban = await tanyaAI(trimmedText);
+      await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
 
-              const emoji = await tanyaReaksi(trimmedText);
-              await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-              console.log(`✨ Emoji dikirim: ${emoji}`);
-          }
-         }
-        } else {
-      // 📌 MODE PRIVATE CHAT → AI jawab semua
-          const jawaban = await tanyaAI(trimmedText);
-          await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
-
-          const emoji = await tanyaReaksi(trimmedText);
-          await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-          console.log(`✨ Emoji dikirim: ${emoji}`);
-        }
-
+      try {
+        const emoji = await tanyaReaksi(trimmedText);
+        await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+        console.log(`✨ Emoji dikirim: ${emoji}`);
       } catch (err) {
-        console.error('❌ Gagal membalas/reaksi:', err);
+        if (/No sessions/i.test(err?.message)) {
+          console.log(`⚠️ Gagal kirim reaksi ke ${senderJid} (No session)`);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // 📌 MODE GRUP → hanya jawab kalau di-mention atau di-reply
+    if (isGroup && (isMentioned || isReplyToBot)) {
+      const jawaban = await tanyaAI(trimmedText);
+      await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+
+      try {
+        const emoji = await tanyaReaksi(trimmedText);
+        await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+        console.log(`✨ Emoji dikirim: ${emoji}`);
+      } catch (err) {
+        if (/No sessions/i.test(err?.message)) {
+          console.log(`⚠️ Gagal kirim reaksi di grup ke ${senderJid} (No session)`);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error('❌ Gagal membalas/reaksi:', err);
   }
 });
-
 
  } catch (err) {
     console.error('❌ Error saat inisialisasi bot:', err);
