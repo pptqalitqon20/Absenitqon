@@ -108,7 +108,7 @@ async function handleUjianWA(message, sock) {
 }
 
 return false;
-
+}
 
 // Fungsi utama
 async function startBot() {
