@@ -90,16 +90,16 @@ async function handleUjianWA(message, sock) {
       const options = { day: 'numeric', month: 'long', year: 'numeric' };
       const tanggalFormatted = tanggalObj.toLocaleDateString('id-ID', options);
 
-      return `👤Nama: ${nama}
-📃Ujian: ${ujian}
-📖Juz: ${juz}
-📆Tanggal: ${tanggalFormatted}
-🏷Status: ${status}`;
+      return `*👤Nama:* ${nama}
+*📃Ujian:* ${ujian}
+*📖Juz:* ${juz}
+*📆Tanggal:* ${tanggalFormatted}
+*🏷Status:* ${status}`;
     }).join("\n\n");
 
     const pesan = nama
       ? `📄 Data ujian untuk *${nama}*:\n\n${hasil}`
-      : `📄 Daftar Santri Yang Telah Ujian:\n\n${hasil}`;
+      : `📄 *Daftar Santri Yang Telah Ujian*\n\n${hasil}`;
 
     await sock.sendMessage(sender, { text: pesan });
   }
@@ -181,25 +181,21 @@ async function startBot() {
       const isMentioned = mentionedJids.includes(botNumber);
       const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
 
-      try {
-        const handled = await handleUjianWA(msg, sock);
-        if (handled) return; // ✅ Stop jika pesan sudah ditangani
-      } catch (e) {
-        console.error('❌ Gagal handle pesan ujian:', e);
-      }
-
       if (!isGroup || isMentioned || isReplyToBot) {
-        try {
-          const jawaban = await tanyaAI(text);
-          await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+       try {
+         const handled = await handleUjianWA(msg, sock);
+         if (handled) return; // ✅ Stop kalau sudah ditangani
 
-          const emoji = await tanyaReaksi(text);
-          await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-          console.log(`✨ Emoji dikirim: ${emoji}`);
-        } catch (err) {
-          console.error('❌ Gagal membalas/reaksi dari AI:', err);
-        }
+         const jawaban = await tanyaAI(text);
+         await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+
+         const emoji = await tanyaReaksi(text);
+         await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+         console.log(`✨ Emoji dikirim: ${emoji}`);
+       } catch (err) {
+         console.error('❌ Gagal membalas/reaksi:', err);
       }
+   }
     });
 
   } catch (err) {
@@ -211,8 +207,8 @@ async function startBot() {
 
 // Mulai bot
 (async () => {
-  console.log('⏳ Menunggu 10 detik agar koneksi lama benar-benar mati...');
-  await new Promise(resolve => setTimeout(resolve, 10000));
+  console.log('⏳ Menunggu 20 detik agar koneksi lama benar-benar mati...');
+  await new Promise(resolve => setTimeout(resolve, 20000));
   startBot();
 })();
 
