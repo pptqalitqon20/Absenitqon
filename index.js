@@ -173,61 +173,75 @@ async function startBot() {
   }
     });
 
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-     const msg = messages[0];
-     if (!msg.message || msg.key.fromMe) return;
+    // 📥 Event pesan masuk
+    sock.ev.on('messages.upsert', async (m) => {
+      const msg = m.messages[0];
+      if (!msg.message || msg.key.fromMe) return;
 
-     const isGroup = msg.key.remoteJid.endsWith('@g.us');
-     const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
-     const replyJid = isGroup ? msg.key.remoteJid : senderJid;
+      const isGroup = msg.key.remoteJid.endsWith('@g.us');
+      const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
+      const replyJid = isGroup ? msg.key.remoteJid : senderJid;
 
-     const text = extractText(msg);
-  
-  // ✅ Deteksi JID bot yang fleksibel
-     const botJid = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
-     const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-     const isMentioned = mentionedJids.some(jid => jid.includes(botJid));
-     const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant?.includes(botJid);
-
-     try {
-    // ✅ Deteksi apakah ini perintah khusus ujian
-       const isCommand = /^ujian\s-|^edit\s-|^lihat/i.test(text);
-
-    // 📌 PRIORITAS PERINTAH
-     if (isCommand) {
-      const handled = await handleUjianWA(msg, sock);
-      if (handled) return; // Stop kalau sudah ditangani
+      if (isGroup) {
+      console.log('📢 Pesan dari grup:', msg.key.remoteJid);
     }
 
-    // 📌 MODE GRUP
-     if (isGroup) {
-      if (isMentioned || isReplyToBot) {
-        // Kalau bukan perintah khusus → AI yang jawab
-        if (!isCommand) {
-          const jawaban = await tanyaAI(text);
+  // Ambil teks dari pesan
+      const text =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption ||
+        msg.message?.buttonsResponseMessage?.selectedButtonId ||
+        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+    '';
+
+      const trimmedText = typeof text === 'string' ? text.trim() : '';
+
+  // ✅ Deteksi JID bot (format pasti)
+      const botNumber = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
+      const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+      const isMentioned = mentionedJids.includes(botNumber);
+      const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
+
+      try {
+    // ✅ Deteksi apakah ini perintah khusus ujian
+        const isCommand = /^ujian\s-|^edit\s-|^lihat/i.test(trimmedText);
+
+    // 📌 PRIORITAS PERINTAH
+        if (isCommand) {
+          const handled = await handleUjianWA(msg, sock);
+          if (handled) return; // Stop kalau sudah ditangani
+      }
+
+    // 📌 MODE GRUP → Hanya respon kalau di-mention atau di-reply
+        if (isGroup) {
+          if (isMentioned || isReplyToBot) {
+            if (!isCommand) {
+              const jawaban = await tanyaAI(trimmedText);
+              await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+
+              const emoji = await tanyaReaksi(trimmedText);
+              await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+              console.log(`✨ Emoji dikirim: ${emoji}`);
+          }
+         }
+        } else {
+      // 📌 MODE PRIVATE CHAT → AI jawab semua
+          const jawaban = await tanyaAI(trimmedText);
           await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
 
-          const emoji = await tanyaReaksi(text);
+          const emoji = await tanyaReaksi(trimmedText);
           await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
           console.log(`✨ Emoji dikirim: ${emoji}`);
         }
-      }
-    } else {
-      // 📌 MODE PRIVATE CHAT → AI jawab semua
-      const jawaban = await tanyaAI(text);
-      await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
 
-      const emoji = await tanyaReaksi(text);
-      await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-      console.log(`✨ Emoji dikirim: ${emoji}`);
-    }
-
-  } catch (err) {
-    console.error('❌ Gagal membalas/reaksi:', err);
+      } catch (err) {
+        console.error('❌ Gagal membalas/reaksi:', err);
   }
 });
 
-  } catch (err) {
+
+ } catch (err) {
     console.error('❌ Error saat inisialisasi bot:', err);
     console.log(`⏳ Restart otomatis dalam ${RECONNECT_INTERVAL / 1000} detik...`);
     setTimeout(startBot, RECONNECT_INTERVAL);
