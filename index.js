@@ -124,10 +124,12 @@ async function startBot() {
       const isMentioned = mentionedJids.includes(botNumber);
       const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
       try {
-        await handleUjianWA(msg, sock);
+        const handled = await handleUjianWA(msg, sock);
+        if (handled) return; // Hentikan jika sudah ditangani oleh handleUjianWA
       } catch (e) {
         console.error('❌ Gagal handle pesan ujian:', e);
       }
+
       if (!isGroup || isMentioned || isReplyToBot) {
         try {
           const jawaban = await tanyaAI(trimmedText);
@@ -171,34 +173,34 @@ async function handleUjianWA(message, sock) {
       nama, jenis, juz, keterangan
     });
     await sock.sendMessage(sender, { text: res.data.message });
+    return true;
   }
 
   if (text.startsWith("Lihat")) {
-  let nama = null;
+    let nama = null;
+    if (text.includes(" - ")) {
+      [, nama] = text.split(" - ");
+    }
 
-  if (text.includes(" - ")) {
-    [, nama] = text.split(" - ");
+    const res = await axios.post(url, {
+      mode: "lihat",
+      nama
+    });
+
+    const data = res.data.data;
+
+    if (data.length === 0) {
+      await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
+    } else {
+      const hasil = data.map((r, i) =>
+        `${i + 1}. ${r[0]} - ${r[1]} - Juz ${r[2]} - ${r[4]} (${r[3]})`
+      ).join("\n");
+
+      const pesan = nama ? `📄 Data ujian untuk *${nama}*:\n` : `📄 Semua data ujian:\n`;
+      await sock.sendMessage(sender, { text: pesan + hasil });
+    }
+    return true;
   }
-
-  const res = await axios.post(url, {
-    mode: "lihat",
-    nama
-  });
-
-  const data = res.data.data;
-
-  if (data.length === 0) {
-    await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
-  } else {
-    const hasil = data.map((r, i) => 
-      `${i+1}. ${r[0]} - ${r[1]} - Juz ${r[2]} - ${r[4]} (${r[3]})`
-    ).join("\n");
-
-    const pesan = nama ? `📄 Data ujian untuk *${nama}*:\n` : `📄 Semua data ujian:\n`;
-    await sock.sendMessage(sender, { text: pesan + hasil });
-  }
-}
-
 
   if (text.startsWith("Edit -")) {
     const [, nama, jenis, juz, keterangan] = text.split(" - ");
@@ -207,7 +209,10 @@ async function handleUjianWA(message, sock) {
       nama, jenis, juz, keterangan
     });
     await sock.sendMessage(sender, { text: res.data.message });
+    return true;
   }
+
+  return false; // Tidak dikenali
 }
 
 // Start bot
