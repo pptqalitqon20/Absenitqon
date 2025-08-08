@@ -73,29 +73,42 @@ async function handleUjianWA(message, sock) {
   }
 
   if (text.startsWith("Lihat")) {
-    let nama = null;
-    if (text.includes(" - ")) [, nama] = text.split(" - ");
+  let nama = null;
+  if (text.includes(" - ")) [, nama] = text.split(" - ");
 
-    const res = await axios.post(ujianAPI, { mode: "lihat", nama });
-    const data = res.data.data;
+  const res = await axios.post(ujianAPI, { mode: "lihat", nama });
+  const data = res.data.data;
 
-    if (data.length === 0) {
-      await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
-    } else {
-      const hasil = data.map((r, i) =>
-        `${i + 1}. ${r[0]} - ${r[1]} - Juz ${r[2]} - ${r[4]} (${r[3]})`
-      ).join("\n");
+  if (data.length === 0) {
+    await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
+  } else {
+    const hasil = data.map((r) => {
+      const [nama, ujian, juz, tanggalISO, status] = r;
 
-      const pesan = nama
-        ? `📄 Data ujian untuk *${nama}*:\n${hasil}`
-        : `📄 Semua data ujian:\n${hasil}`;
-      await sock.sendMessage(sender, { text: pesan });
-    }
-    return true;
+      // Format tanggal dari ISO ke tanggal biasa
+      const tanggalObj = new Date(tanggalISO);
+      const options = { day: 'numeric', month: 'long', year: 'numeric' };
+      const tanggalFormatted = tanggalObj.toLocaleDateString('id-ID', options);
+
+      return `👤Nama: ${nama}
+📃Ujian: ${ujian}
+📖Juz: ${juz}
+📆Tanggal: ${tanggalFormatted}
+🏷Status: ${status}`;
+    }).join("\n\n");
+
+    const pesan = nama
+      ? `📄 Data ujian untuk *${nama}*:\n\n${hasil}`
+      : `📄 Daftar Santri Yang Telah Ujian:\n\n${hasil}`;
+
+    await sock.sendMessage(sender, { text: pesan });
   }
 
-  return false;
+  return true;
 }
+
+return false;
+
 
 // Fungsi utama
 async function startBot() {
