@@ -175,52 +175,55 @@ async function startBot() {
 
     // 📥 Event pesan masuk
     sock.ev.on('messages.upsert', async (m) => {
-      const msg = m.messages[0];
-      if (!msg.message || msg.key.fromMe) return;
+  const msg = m.messages[0];
+  if (!msg.message || msg.key.fromMe) return;
 
-      const isGroup = msg.key.remoteJid.endsWith('@g.us');
-      const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
-      const replyJid = isGroup ? msg.key.remoteJid : senderJid;
+  const isGroup = msg.key.remoteJid.endsWith('@g.us');
+  const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
+  const replyJid = isGroup ? msg.key.remoteJid : senderJid;
 
-      if (isGroup) {
-      console.log('📢 Pesan dari grup:', msg.key.remoteJid);
-    }
+  if (isGroup) {
+    console.log('📢 Pesan dari grup:', msg.key.remoteJid);
+  }
 
-  // Ambil teks dari pesan
-      const text =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption ||
-        msg.message?.buttonsResponseMessage?.selectedButtonId ||
-        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+  // Ambil teks
+  const text =
+    msg.message?.conversation ||
+    msg.message?.extendedTextMessage?.text ||
+    msg.message?.imageMessage?.caption ||
+    msg.message?.buttonsResponseMessage?.selectedButtonId ||
+    msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
     '';
 
-      const trimmedText = typeof text === 'string' ? text.trim() : '';
-      console.log('💬 Teks pesan:', trimmedText);
+  const trimmedText = typeof text === 'string' ? text.trim() : '';
 
-  // ✅ Deteksi JID bot (format pasti)
-      const botNumber = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
-      const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      const isMentioned = mentionedJids.includes(botNumber);
-      const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
-      console.log('🤖 Bot Number:', botNumber);
-      console.log('📋 mentionedJids:', mentionedJids);
-      console.log('👤 participant:', participant);
-      console.log('📌 isMentioned:', isMentioned);
-      console.log('📌 isReplyToBot:', isReplyToBot);
+  // Debug: tampilkan teks
+  console.log('💬 Teks pesan:', trimmedText);
 
-      try {
-    // ✅ Deteksi apakah ini perintah khusus ujian
-        const isCommand = /^ujian\s-|^edit\s-|^lihat/i.test(trimmedText);
+  // ✅ Deteksi bot JID
+  const botNumber = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
+  const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  const participant = msg.message?.extendedTextMessage?.contextInfo?.participant;
 
-    // 📌 PRIORITAS PERINTAH
-        if (isCommand) {
-          console.log('⚡ Deteksi perintah khusus:', trimmedText);
-          const handled = await handleUjianWA(msg, sock);
-          if (handled) return; // Stop kalau sudah ditangani
-      }
+  const isMentioned = mentionedJids.includes(botNumber);
+  const isReplyToBot = participant === botNumber;
 
-    // 📌 MODE PRIVATE → selalu jawab
+  // Debug: tampilkan semua variabel
+  console.log('🤖 Bot Number:', botNumber);
+  console.log('📋 mentionedJids:', mentionedJids);
+  console.log('👤 participant:', participant);
+  console.log('📌 isMentioned:', isMentioned);
+  console.log('📌 isReplyToBot:', isReplyToBot);
+
+  try {
+    const isCommand = /^ujian\s-|^edit\s-|^lihat/i.test(trimmedText);
+
+    if (isCommand) {
+      console.log('⚡ Deteksi perintah khusus:', trimmedText);
+      const handled = await handleUjianWA(msg, sock);
+      if (handled) return;
+    }
+
     if (!isGroup) {
       console.log('📥 Mode Private → AI jawab');
       const jawaban = await tanyaAI(trimmedText);
@@ -229,17 +232,13 @@ async function startBot() {
       try {
         const emoji = await tanyaReaksi(trimmedText);
         await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-        console.log(`✨ Emoji dikirim: ${emoji}`);
       } catch (err) {
         if (/No sessions/i.test(err?.message)) {
           console.log(`⚠️ Gagal kirim reaksi ke ${senderJid} (No session)`);
-        } else {
-          throw err;
-        }
+        } else throw err;
       }
     }
 
-    // 📌 MODE GRUP → hanya jawab kalau di-mention atau di-reply
     if (isGroup && (isMentioned || isReplyToBot)) {
       console.log('📥 Mode Grup (Mention/Reply) → AI jawab');
       const jawaban = await tanyaAI(trimmedText);
@@ -248,13 +247,10 @@ async function startBot() {
       try {
         const emoji = await tanyaReaksi(trimmedText);
         await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-        console.log(`✨ Emoji dikirim: ${emoji}`);
       } catch (err) {
         if (/No sessions/i.test(err?.message)) {
           console.log(`⚠️ Gagal kirim reaksi di grup ke ${senderJid} (No session)`);
-        } else {
-          throw err;
-        }
+        } else throw err;
       }
     }
 
