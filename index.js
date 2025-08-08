@@ -123,7 +123,11 @@ async function startBot() {
       const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
       const isMentioned = mentionedJids.includes(botNumber);
       const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
-
+      try {
+        await handleUjianWA(msg, sock);
+      } catch (e) {
+        console.error('❌ Gagal handle pesan ujian:', e);
+      }
       if (!isGroup || isMentioned || isReplyToBot) {
         try {
           const jawaban = await tanyaAI(trimmedText);
@@ -151,6 +155,60 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (err) => {
   console.error('🚨 Unhandled Rejection:', err);
 });
+
+const axios = require('axios');
+
+async function handleUjianWA(message, sock) {
+  const sender = message.key.remoteJid;
+  const text = message.message.conversation || "";
+
+  const url = "https://script.google.com/macros/s/AKfycbwYubun2rCsY0E7Z4KY6DorYCHUqoyXAWxQtq9H9F5HFwQaIEu0IrwWn2XxiYtn78qDiA/exec";
+
+  if (text.startsWith("Ujian -")) {
+    const [, nama, jenis, juz, keterangan] = text.split(" - ");
+    const res = await axios.post(url, {
+      mode: "simpan",
+      nama, jenis, juz, keterangan
+    });
+    await sock.sendMessage(sender, { text: res.data.message });
+  }
+
+  if (text.startsWith("Lihat")) {
+  let nama = null;
+
+  if (text.includes(" - ")) {
+    [, nama] = text.split(" - ");
+  }
+
+  const res = await axios.post(url, {
+    mode: "lihat",
+    nama
+  });
+
+  const data = res.data.data;
+
+  if (data.length === 0) {
+    await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
+  } else {
+    const hasil = data.map((r, i) => 
+      `${i+1}. ${r[0]} - ${r[1]} - Juz ${r[2]} - ${r[4]} (${r[3]})`
+    ).join("\n");
+
+    const pesan = nama ? `📄 Data ujian untuk *${nama}*:\n` : `📄 Semua data ujian:\n`;
+    await sock.sendMessage(sender, { text: pesan + hasil });
+  }
+}
+
+
+  if (text.startsWith("Edit -")) {
+    const [, nama, jenis, juz, keterangan] = text.split(" - ");
+    const res = await axios.post(url, {
+      mode: "edit",
+      nama, jenis, juz, keterangan
+    });
+    await sock.sendMessage(sender, { text: res.data.message });
+  }
+}
 
 // Start bot
 (async () => {
