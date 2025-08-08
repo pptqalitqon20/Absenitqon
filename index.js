@@ -54,7 +54,7 @@ async function handleUjianWA(message, sock) {
   const sender = message.key.remoteJid;
   const text = extractText(message);
 
-  if (text.toLowerCase().startsWith("ujian -")) {
+  if (text.startsWith("Ujian -")) {
     const [, nama, jenis, juz, keterangan] = text.split(" - ");
     const res = await axios.post(ujianAPI, {
       mode: "simpan", nama, jenis, juz, keterangan
@@ -63,7 +63,7 @@ async function handleUjianWA(message, sock) {
     return true;
   }
 
-   if (text.toLowerCase().startsWith("Edit -")) {
+  if (text.startsWith("Edit -")) {
     const [, nama, jenis, juz, keterangan] = text.split(" - ");
     const res = await axios.post(ujianAPI, {
       mode: "edit", nama, jenis, juz, keterangan
@@ -72,43 +72,27 @@ async function handleUjianWA(message, sock) {
     return true;
   }
 
-   if (text.toLowerCase().startsWith("Lihat")) {
-  let nama = null;
-  if (text.includes(" - ")) {
-    [, nama] = text.split(" - ");
+  if (text.startsWith("Lihat")) {
+    let nama = null;
+    if (text.includes(" - ")) [, nama] = text.split(" - ");
+
+    const res = await axios.post(ujianAPI, { mode: "lihat", nama });
+    const data = res.data.data;
+
+    if (data.length === 0) {
+      await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
+    } else {
+      const hasil = data.map((r, i) =>
+        `${i + 1}. ${r[0]} - ${r[1]} - Juz ${r[2]} - ${r[4]} (${r[3]})`
+      ).join("\n");
+
+      const pesan = nama
+        ? `📄 Data ujian untuk *${nama}*:\n${hasil}`
+        : `📄 Semua data ujian:\n${hasil}`;
+      await sock.sendMessage(sender, { text: pesan });
+    }
+    return true;
   }
-
-  const res = await axios.post(ujianAPI, {
-    mode: "lihat",
-    nama
-  });
-
-  const data = res.data.data;
-
-  if (data.length === 0) {
-    await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
-  } else {
-    const hasil = data.map((r) => {
-      const nama = r[0];
-      const jenis = r[1];
-      const juz = r[2];
-      const tanggalRaw = r[3];
-      const keterangan = r[4];
-
-      const tanggal = new Date(tanggalRaw).toLocaleDateString('id-ID', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-
-      return `👨🏻‍🎓 *${nama}*\n🪧 *Tipe Ujian* : ${jenis}\n📖 *Juz*        : ${juz}\n📆 *Tanggal*    : ${tanggal}\n📝 *Keterangan* : ${keterangan}`;
-    }).join("\n\n");
-
-    const header = `📋 *Daftar Santri Yang Telah Ujian*\n\n👤 *Nama Santri: ${nama || "Semua"}*\n`;
-    await sock.sendMessage(sender, { text: header + "\n" + hasil });
-  }
-  return true;
-}
 
   return false;
 }
