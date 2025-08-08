@@ -144,27 +144,33 @@ async function startBot() {
         startCronJobs();
       }
       if (connection === 'close') {
-        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-        console.log('📴 Disconnect. Code:', reason, DisconnectReason[reason] || 'Unknown');
+       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+       console.log(`📴 Disconnect. Code: ${reason} (${DisconnectReason[reason] || 'Unknown'})`);
 
-        if (reason === DisconnectReason.loggedOut) {
-          console.log('🧹 Session logout. Menghapus folder auth...');
-          fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-          return startBot();
-        }
+  // Kalau connectionReplaced, jangan reconnect, langsung keluar
+  if (reason === DisconnectReason.connectionReplaced) {
+    console.log('🔁 Sesi digantikan. Keluar agar Render bisa restart clean.');
+    process.exit(0); // ❗ ini kunci utama
+  }
 
-        if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          isReconnecting = true;
-          reconnectAttempts++;
-          console.log(`⏳ Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-          setTimeout(() => {
-            isReconnecting = false;
-            startBot().catch(console.error);
-          }, RECONNECT_INTERVAL);
-        } else {
-          console.log('❌ Gagal reconnect. Restart manual diperlukan.');
-        }
-      }
+    if (reason === DisconnectReason.loggedOut) {
+      console.log('🧹 Session logout. Menghapus folder auth...');
+      fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+      return startBot();
+  }
+
+    if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      isReconnecting = true;
+      reconnectAttempts++;
+      console.log(`⏳ Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+      setTimeout(() => {
+        isReconnecting = false;
+        startBot().catch(console.error);
+     }, RECONNECT_INTERVAL);
+    } else {
+      console.log('❌ Gagal reconnect. Restart manual diperlukan.');
+    }
+  }
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
