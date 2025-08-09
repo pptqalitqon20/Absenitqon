@@ -73,41 +73,41 @@ async function handleUjianWA(message, sock) {
   }
 
   if (text.startsWith("Lihat")) {
-  let nama = null;
-  if (text.includes(" - ")) [, nama] = text.split(" - ");
+    let nama = null;
+    if (text.includes(" - ")) [, nama] = text.split(" - ");
 
-  const res = await axios.post(ujianAPI, { mode: "lihat", nama });
-  const data = res.data.data;
+    const res = await axios.post(ujianAPI, { mode: "lihat", nama });
+    const data = res.data.data;
 
-  if (data.length === 0) {
-    await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
-  } else {
-    const hasil = data.map((r) => {
-      const [nama, ujian, juz, tanggalISO, status] = r;
+    if (data.length === 0) {
+      await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
+    } else {
+      const hasil = data.map((r) => {
+        const [nama, ujian, juz, tanggalISO, status] = r;
 
-      // Format tanggal dari ISO ke tanggal biasa
-      const tanggalObj = new Date(tanggalISO);
-      const options = { day: 'numeric', month: 'long', year: 'numeric' };
-      const tanggalFormatted = tanggalObj.toLocaleDateString('id-ID', options);
+        // Format tanggal dari ISO ke tanggal biasa
+        const tanggalObj = new Date(tanggalISO);
+        const options = { day: 'numeric', month: 'long', year: 'numeric' };
+        const tanggalFormatted = tanggalObj.toLocaleDateString('id-ID', options);
 
-      return `*👤Nama:* ${nama}
+        return `*👤Nama:* ${nama}
 *📃Ujian:* ${ujian}
 *📖Juz:* ${juz}
 *📆Tanggal:* ${tanggalFormatted}
 *🏷Status:* ${status}`;
-    }).join("\n\n");
+      }).join("\n\n");
 
-    const pesan = nama
-      ? `📄 Data ujian untuk *${nama}*:\n\n${hasil}`
-      : `📄 *Daftar Santri Yang Telah Ujian*\n\n${hasil}`;
+      const pesan = nama
+        ? `📄 Data ujian untuk *${nama}*:\n\n${hasil}`
+        : `📄 *Daftar Santri Yang Telah Ujian*\n\n${hasil}`;
 
-    await sock.sendMessage(sender, { text: pesan });
+      await sock.sendMessage(sender, { text: pesan });
+    }
+
+    return true;
   }
 
-  return true;
-}
-
-return false;
+  return false;
 }
 
 // Fungsi utama
@@ -144,80 +144,107 @@ async function startBot() {
         startCronJobs();
       }
       if (connection === 'close') {
-       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-       console.log(`📴 Disconnect. Code: ${reason} (${DisconnectReason[reason] || 'Unknown'})`);
+        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+        console.log(`📴 Disconnect. Code: ${reason} (${DisconnectReason[reason] || 'Unknown'})`);
 
-  // Kalau connectionReplaced, jangan reconnect, langsung keluar
-  if (reason === DisconnectReason.connectionReplaced) {
-    console.log('🔁 Sesi digantikan. Keluar agar Render bisa restart clean.');
-    process.exit(0); // ❗ ini kunci utama
-  }
+        // Kalau connectionReplaced, jangan reconnect, langsung keluar
+        if (reason === DisconnectReason.connectionReplaced) {
+          console.log('🔁 Sesi digantikan. Keluar agar Render bisa restart clean.');
+          process.exit(0); // ❗ ini kunci utama
+        }
 
-    if (reason === DisconnectReason.loggedOut) {
-      console.log('🧹 Session logout. Menghapus folder auth...');
-      fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-      return startBot();
-  }
+        if (reason === DisconnectReason.loggedOut) {
+          console.log('🧹 Session logout. Menghapus folder auth...');
+          fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+          return startBot();
+        }
 
-    if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-      isReconnecting = true;
-      reconnectAttempts++;
-      console.log(`⏳ Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-      setTimeout(() => {
-        isReconnecting = false;
-        startBot().catch(console.error);
-     }, RECONNECT_INTERVAL);
-    } else {
-      console.log('❌ Gagal reconnect. Restart manual diperlukan.');
-    }
-  }
+        if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          isReconnecting = true;
+          reconnectAttempts++;
+          console.log(`⏳ Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+          setTimeout(() => {
+            isReconnecting = false;
+            startBot().catch(console.error);
+          }, RECONNECT_INTERVAL);
+        } else {
+          console.log('❌ Gagal reconnect. Restart manual diperlukan.');
+        }
+      }
     });
 
     // 📥 Event pesan masuk
+    sock.ev.onAny((event, data) => {
+      console.log("📡 EVENT:", event);
+    });
+
     sock.ev.on('messages.upsert', async ({ messages }) => {
-  const msg = messages[0];
-  if (!msg.message || msg.key.fromMe) return;
+      console.log("📩 messages.upsert TERPANGGIL");
 
-  const isGroup = msg.key.remoteJid.endsWith('@g.us');
-  const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
-  const replyJid = isGroup ? msg.key.remoteJid : senderJid;
+      const msg = messages[0];
+      console.log("📄 RAW MESSAGE:", JSON.stringify(msg, null, 2));
 
-  const text = extractText(msg) || '';
-  
-  // Nomor bot tanpa device id
-  const botNumberOnly = sock.user?.id?.split(':')[0];
-  const botJid = botNumberOnly + '@s.whatsapp.net';
-
-  // Deteksi mention & reply
-  const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-  const participant = msg.message?.extendedTextMessage?.contextInfo?.participant || '';
-  const isMentioned = mentionedJids.some(jid => jid.startsWith(botNumberOnly));
-  const isReplyToBot = participant.startsWith(botNumberOnly);
-
-  try {
-    // --- Cek perintah khusus ---
-    if (/^(lihat|edit|ujian)$/i.test(text.trim())) {
-      const handled = await handleUjianWA(msg, sock);
-      if (handled) return; // stop di sini kalau sudah ditangani
-    }
-
-    // --- Logika AI ---
-    if (!isGroup || isMentioned || isReplyToBot) {
-      const jawaban = await tanyaAI(text);
-      await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
-
-      const emoji = await tanyaReaksi(text);
-      if (emoji) {
-        await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-        console.log(`✨ Emoji dikirim: ${emoji}`);
+      // Cek isi pesan
+      if (!msg.message) {
+        console.log("⚠ Pesan tidak punya 'message', dilewati");
+        return;
       }
-    }
-  } catch (err) {
-    console.error('❌ Gagal memproses pesan:', err);
-  }
-});
+      if (msg.key.fromMe) {
+        console.log("⚠ Pesan dari bot sendiri, dilewati");
+        return;
+      }
 
- } catch (err) {
+      const isGroup = msg.key.remoteJid.endsWith('@g.us');
+      const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
+      const replyJid = isGroup ? msg.key.remoteJid : senderJid;
+
+      let text = "";
+      try {
+        text = extractText(msg) || "";
+      } catch (err) {
+        console.error("❌ Gagal extractText:", err);
+        return;
+      }
+
+      console.log(`💬 Pesan dari ${senderJid}: "${text}"`);
+
+      const botNumber = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
+      const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+      const isMentioned = mentionedJids.includes(botNumber);
+      const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
+
+      console.log("📌 Status mention:", isMentioned, "| reply:", isReplyToBot, "| group:", isGroup);
+
+      // Deteksi apakah mengandung perintah khusus
+      const lowerText = text.toLowerCase();
+      const isCommand = lowerText.includes("lihat") || lowerText.includes("edit") || lowerText.includes("ujian");
+
+      if (!isGroup || isMentioned || isReplyToBot) {
+        try {
+          if (isCommand) {
+            console.log("⚙ Menjalankan handler khusus...");
+            const handled = await handleUjianWA(msg, sock);
+            if (handled) {
+              console.log("✅ Handler khusus selesai, AI tidak dijalankan");
+              return;
+            }
+          } else {
+            console.log("🤖 Menjalankan AI...");
+            const jawaban = await tanyaAI(text);
+            await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+
+            const emoji = await tanyaReaksi(text);
+            await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+            console.log(`✨ Emoji dikirim: ${emoji}`);
+          }
+        } catch (err) {
+          console.error("❌ Gagal memproses pesan:", err);
+        }
+      } else {
+        console.log("⏩ Pesan diabaikan (bukan mention/reply ke bot)");
+      }
+    });
+  } catch (err) {
     console.error('❌ Error saat inisialisasi bot:', err);
     console.log(`⏳ Restart otomatis dalam ${RECONNECT_INTERVAL / 1000} detik...`);
     setTimeout(startBot, RECONNECT_INTERVAL);
