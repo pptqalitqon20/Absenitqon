@@ -54,8 +54,14 @@ async function handleUjianWA(message, sock) {
   const sender = message.key.remoteJid;
   const text = extractText(message);
 
+  // ====== SIMPAN DATA UJIAN ======
   if (text.startsWith("Ujian -")) {
-    const [, nama, jenis, juz, keterangan] = text.split(" - ");
+    const parts = text.split(" - ");
+    if (parts.length < 5) {
+      await sock.sendMessage(sender, { text: "⚠️ Format salah!\nContoh:\nUjian - Nama - Jenis - Juz - Keterangan" });
+      return true;
+    }
+    const [, nama, jenis, juz, keterangan] = parts;
     const res = await axios.post(ujianAPI, {
       mode: "simpan", nama, jenis, juz, keterangan
     });
@@ -63,8 +69,14 @@ async function handleUjianWA(message, sock) {
     return true;
   }
 
+  // ====== EDIT DATA UJIAN ======
   if (text.startsWith("Edit -")) {
-    const [, nama, jenis, juz, keterangan] = text.split(" - ");
+    const parts = text.split(" - ");
+    if (parts.length < 5) {
+      await sock.sendMessage(sender, { text: "⚠️ Format salah!\nContoh:\nEdit - Nama - Jenis - Juz - Keterangan" });
+      return true;
+    }
+    const [, nama, jenis, juz, keterangan] = parts;
     const res = await axios.post(ujianAPI, {
       mode: "edit", nama, jenis, juz, keterangan
     });
@@ -72,12 +84,13 @@ async function handleUjianWA(message, sock) {
     return true;
   }
 
+  // ====== LIHAT DATA UJIAN ======
   if (text.startsWith("Lihat")) {
     let nama = null;
     if (text.includes(" - ")) [, nama] = text.split(" - ");
 
     const res = await axios.post(ujianAPI, { mode: "lihat", nama });
-    const data = res.data.data;
+    const data = res.data.data || [];
 
     if (data.length === 0) {
       await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
@@ -85,7 +98,6 @@ async function handleUjianWA(message, sock) {
       const hasil = data.map((r) => {
         const [nama, ujian, juz, tanggalISO, status] = r;
 
-        // Format tanggal dari ISO ke tanggal biasa
         const tanggalObj = new Date(tanggalISO);
         const options = { day: 'numeric', month: 'long', year: 'numeric' };
         const tanggalFormatted = tanggalObj.toLocaleDateString('id-ID', options);
@@ -103,7 +115,6 @@ async function handleUjianWA(message, sock) {
 
       await sock.sendMessage(sender, { text: pesan });
     }
-
     return true;
   }
 
@@ -173,68 +184,43 @@ async function startBot() {
     });
 
     // 📥 Event pesan masuk
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      console.log("📩 EVENT TYPE:", type);
+    sock.ev.on('messages.upsert', async (m) => {
+      const msg = m.messages[0];
+      if (!msg.message || msg.key.fromMe) return;
 
-      const msg = messages[0];
-      console.log("📄 RAW MESSAGE:", JSON.stringify(msg, null, 2));
-
-      if (!msg.message) {
-        console.log("⚠ Pesan tidak punya 'message', dilewati");
-        return;
-      }
-      if (msg.key.fromMe) {
-        console.log("⚠ Pesan dari bot sendiri, dilewati");
-        return;
-      }
+      // Jalankan fitur ujian dulu
+      const handled = await handleUjianWA(msg, sock);
+      if (handled) return;
 
       const isGroup = msg.key.remoteJid.endsWith('@g.us');
       const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
       const replyJid = isGroup ? msg.key.remoteJid : senderJid;
 
-      let text = "";
-      try {
-        text = extractText(msg) || "";
-      } catch (err) {
-        console.error("❌ Gagal extractText:", err);
-        return;
-      }
+      const text =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption ||
+        msg.message?.buttonsResponseMessage?.selectedButtonId ||
+        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId || '';
 
-      console.log(`💬 Pesan dari ${senderJid}: "${text}"`);
-
+      const trimmedText = typeof text === 'string' ? text.trim() : '';
       const botNumber = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
       const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
       const isMentioned = mentionedJids.includes(botNumber);
       const isReplyToBot = msg.message?.extendedTextMessage?.contextInfo?.participant === botNumber;
 
-      console.log("📌 Status mention:", isMentioned, "| reply:", isReplyToBot, "| group:", isGroup);
-
-      const lowerText = text.toLowerCase();
-      const isCommand = lowerText.includes("lihat") || lowerText.includes("edit") || lowerText.includes("ujian");
-
-      if (!isGroup || isMentioned || isReplyToBot) {
+      // 🧠 Tanya AI (hanya di private chat atau saat disebut di grup)
+      if (!isGroup && (isMentioned || isReplyToBot)) {
         try {
-          if (isCommand) {
-            console.log("⚙ Menjalankan handler khusus...");
-            const handled = await handleUjianWA(msg, sock);
-            if (handled) {
-              console.log("✅ Handler khusus selesai, AI tidak dijalankan");
-              return;
-            }
-          } else {
-            console.log("🤖 Menjalankan AI...");
-            const jawaban = await tanyaAI(text);
-            await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+          const jawaban = await tanyaAI(trimmedText);
+          await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
 
-            const emoji = await tanyaReaksi(text);
-            await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
-            console.log(`✨ Emoji dikirim: ${emoji}`);
-          }
+          const emoji = await tanyaReaksi(trimmedText);
+          await sock.sendMessage(replyJid, { react: { text: emoji, key: msg.key } });
+          console.log(`✨ Emoji dikirim: ${emoji}`);
         } catch (err) {
-          console.error("❌ Gagal memproses pesan:", err);
+          console.error('❌ Gagal membalas dari AI:', err);
         }
-      } else {
-        console.log("⏩ Pesan diabaikan (bukan mention/reply ke bot)");
       }
     });
 
