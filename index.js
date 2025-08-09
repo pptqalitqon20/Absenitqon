@@ -147,10 +147,9 @@ async function startBot() {
         const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
         console.log(`📴 Disconnect. Code: ${reason} (${DisconnectReason[reason] || 'Unknown'})`);
 
-        // Kalau connectionReplaced, jangan reconnect, langsung keluar
         if (reason === DisconnectReason.connectionReplaced) {
           console.log('🔁 Sesi digantikan. Keluar agar Render bisa restart clean.');
-          process.exit(0); // ❗ ini kunci utama
+          process.exit(0);
         }
 
         if (reason === DisconnectReason.loggedOut) {
@@ -174,17 +173,12 @@ async function startBot() {
     });
 
     // 📥 Event pesan masuk
-    sock.ev.onAny((event, data) => {
-      console.log("📡 EVENT:", event);
-    });
-
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-      console.log("📩 messages.upsert TERPANGGIL");
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      console.log("📩 EVENT TYPE:", type);
 
       const msg = messages[0];
       console.log("📄 RAW MESSAGE:", JSON.stringify(msg, null, 2));
 
-      // Cek isi pesan
       if (!msg.message) {
         console.log("⚠ Pesan tidak punya 'message', dilewati");
         return;
@@ -215,7 +209,6 @@ async function startBot() {
 
       console.log("📌 Status mention:", isMentioned, "| reply:", isReplyToBot, "| group:", isGroup);
 
-      // Deteksi apakah mengandung perintah khusus
       const lowerText = text.toLowerCase();
       const isCommand = lowerText.includes("lihat") || lowerText.includes("edit") || lowerText.includes("ujian");
 
@@ -244,6 +237,7 @@ async function startBot() {
         console.log("⏩ Pesan diabaikan (bukan mention/reply ke bot)");
       }
     });
+
   } catch (err) {
     console.error('❌ Error saat inisialisasi bot:', err);
     console.log(`⏳ Restart otomatis dalam ${RECONNECT_INTERVAL / 1000} detik...`);
