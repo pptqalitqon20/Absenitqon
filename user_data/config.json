@@ -1,0 +1,58 @@
+{
+  "max_open_trades": 2,
+  "stake_currency": "USDT",
+  "stake_amount": "unlimited",
+  "tradable_balance_ratio": 0.99,
+
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+
+  "timeframe": "5m",
+  "ticker_interval": "5m",
+
+  "exchange": {
+    "name": "binance",
+    "key": "${BINANCE_API_KEY}",
+    "secret": "${BINANCE_API_SECRET}",
+    "uid": "",
+    "ccxt_config": { "enableRateLimit": true },
+    "ccxt_async_config": { "enableRateLimit": true },
+    "pair_whitelist": ["BTC/USDT", "ETH/USDT", "BNB/USDT"],
+    "pair_blacklist": []
+  },
+
+  "telegram": {
+    "enabled": true,
+    "token": "${TELEGRAM_TOKEN}",
+    "chat_id": "${TELEGRAM_CHAT_ID}",
+    "notification_settings": {
+      "status": "on",
+      "warning": "on",
+      "buy": "on",
+      "sell": "on"
+    }
+  },
+
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "0.0.0.0",
+    "listen_port": 8080,
+    "verbosity": "error",
+    "enable_openapi": false,
+    "jwt_secret_key": "${FT_API_JWT_SECRET:-changeme}",
+    "CORS_origins": [],
+    "username": "",
+    "password": ""
+  },
+
+  "bot_name": "itqon-freqtrade",
+  "forcebuy_enable": true,
+  "unfilledtimeout": {
+    "buy": 10,
+    "sell": 10
+  },
+  "entry_pricing": { "price_side": "same", "use_order_book": true },
+  "exit_pricing": { "price_side": "same", "use_order_book": true },
+  "amend_last_stake_amount": false,
+  "disable_dataframe_checks": true
+}
