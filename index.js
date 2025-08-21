@@ -139,63 +139,102 @@ async function startBot() {
       }
     });
 
-    // 📥 Pesan masuk — AI sebagai handler utama + aman di grup
+  // Helper: unwrap pesan yg dibungkus ephemeral/viewOnce/edit
+function getInnerMessage(msg) {
+  return msg?.message?.ephemeralMessage?.message
+      || msg?.message?.viewOnceMessage?.message
+      || msg?.message?.viewOnceMessageV2?.message
+      || msg?.message?.editedMessage?.message
+      || msg?.message
+      || {};
+}
+// Normalisasi JID: buang suffix perangkat ":xx"
+const normJid = (j) => (j ? j.split(':')[0] + '@s.whatsapp.net' : '');
+
 sock.ev.on('messages.upsert', async (m) => {
   try {
     const msg = m.messages?.[0];
-    if (!msg?.message) return;
-    if (msg.key.fromMe) return;
+    if (!msg?.message || msg.key.fromMe) return;
 
     const jid = msg.key.remoteJid;
-    // hindari status atau channel
     if (jid === 'status@broadcast' || jid?.endsWith?.('@newsletter')) return;
 
     const isGroup = jid?.endsWith?.('@g.us');
-    const text = extractText(msg);
+    const inner = getInnerMessage(msg);
 
-    // deteksi mention / reply ke bot
-    const botNumber = (sock.user?.id?.split(':')[0] || '') + '@s.whatsapp.net';
-    const ctx = msg.message?.extendedTextMessage?.contextInfo || {};
-    const mentionedJids = ctx.mentionedJid || [];
-    const isMentioned = mentionedJids.includes(botNumber);
-    const isReplyToBot = ctx.participant === botNumber;
-    console.log({ isGroup, isMentioned, isReplyToBot, jid, text });
+    // Ambil contextInfo dari berbagai tipe message (extText/image/video/doc)
+    const ctx =
+      inner.extendedTextMessage?.contextInfo ||
+      inner.imageMessage?.contextInfo ||
+      inner.videoMessage?.contextInfo ||
+      inner.documentMessage?.contextInfo ||
+      inner.buttonsMessage?.contextInfo ||
+      inner.interactiveResponseMessage?.contextInfo ||
+      {};
 
+    const botBare = normJid(sock.user?.id);
+    const mentionedJids = (ctx.mentionedJid || []).map(normJid);
+    const isMentioned = mentionedJids.includes(botBare);
 
-    // Kebijakan:
-    // - DM: selalu balas
-    // - Grup: balas jika mention atau reply ke bot
-    const shouldReply = !isGroup || isMentioned || isReplyToBot;
+    // Reply ke bot: ada quotedMessage & participant == bot
+    const isReplyToBot = !!ctx.quotedMessage && normJid(ctx.participant) === botBare;
+
+    // Ambil teks
+    const text = (
+      inner.conversation ||
+      inner.extendedTextMessage?.text ||
+      inner.imageMessage?.caption ||
+      inner.videoMessage?.caption ||
+      inner.documentMessage?.caption ||
+      ''
+    ).trim();
+
+    // Fallback mention *opsional* via ENV:
+    // Balas jika teks mengandung '@' + sebagian nomor bot (hindari spam).
+    // Aktifkan dengan set ENV: GROUP_MENTION_FALLBACK=1
+    const botNumber = (sock.user?.id?.split(':')[0] || '');  // mis. 62812xxxx
+    const looksLikeMentionByText =
+      /@\d{6,}/.test(text) &&
+      ( text.includes(botNumber) || text.endsWith(botNumber.slice(-6)) );
+
+    const allowFallback = process.env.GROUP_MENTION_FALLBACK === '1';
+
+    // Log bantu debug
+    console.log({ isGroup, isMentioned, isReplyToBot, allowFallback, looksLikeMentionByText, jid, text });
+
+    // Kebijakan: DM balas selalu; Grup balas jika mention OR reply OR fallback-heuristic aktif & cocok
+    const shouldReply = !isGroup || isMentioned || isReplyToBot || (isGroup && allowFallback && looksLikeMentionByText);
     if (!shouldReply) return;
 
-    // kalau tidak ada teks, beri info singkat
+    // Uji cepat di grup: /ping
+    if (isGroup && text.trim() === '/ping') {
+      await sock.sendMessage(jid, { text: 'pong ✅' }, { quoted: msg });
+      return;
+    }
+
     if (!text) {
       await sock.sendMessage(jid, { text: 'Aku aktif ✅ (pesan tanpa teks).' }, { quoted: msg });
       return;
     }
 
-    // ===== AI sebagai handler utama =====
+    // ===== AI sebagai handler utama + fallback =====
     let replyText;
     try {
-      replyText = await tanyaAI(text, { from: jid, isGroup });
-      if (!replyText) replyText = '(AI tidak memberi jawaban)';
+      replyText = await tanyaAI(text, { from: jid, isGroup }) || '(AI tidak memberi jawaban)';
     } catch (e) {
       console.warn('⚠️ tanyaAI error, fallback echo:', e?.message || e);
       replyText = `echo: ${text}`;
     }
     await sock.sendMessage(jid, { text: replyText }, { quoted: msg });
 
-    // reaksi opsional
     try {
-      const react = await (typeof tanyaReaksi === 'function' ? tanyaReaksi(text) : null);
-      if (react) await sock.sendMessage(jid, { react: { text: react, key: msg.key } });
-    } catch (e) {
-      console.warn('⚠️ tanyaReaksi error:', e?.message || e);
-    }
+      const r = await (typeof tanyaReaksi === 'function' ? tanyaReaksi(text) : null);
+      if (r) await sock.sendMessage(jid, { react: { text: r, key: msg.key } });
+    } catch {}
   } catch (err) {
     console.error('❌ Handler upsert error:', err);
   }
-});
+});  
 
   } catch (err) {
     console.error('❌ Error init bot:', err);
