@@ -159,6 +159,8 @@ sock.ev.on('messages.upsert', async (m) => {
     const mentionedJids = ctx.mentionedJid || [];
     const isMentioned = mentionedJids.includes(botNumber);
     const isReplyToBot = ctx.participant === botNumber;
+    console.log({ isGroup, isMentioned, isReplyToBot, jid, text });
+
 
     // Kebijakan:
     // - DM: selalu balas
