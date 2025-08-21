@@ -9,13 +9,12 @@ const P = require('pino');
 const fs = require('fs');
 const axios = require('axios');
 const { tanyaAI, tanyaReaksi } = require('./handlers/ai');
-const { setSocketInstance, startCronJobs } = require('./lib/broadcast_ayat');
 
 // Konstanta
 const AUTH_FOLDER = './auth_info_baileys';
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 10000;
-const ujianAPI = "https://script.google.com/macros/s/AKfycbwYubun2rCsY0E7Z4KY6DorYCHUqoyXAWxQtq9H9F5HFwQaIEu0IrwWn2XxiYtn78qDiA/exec";
+
 
 // State reconnect
 let isReconnecting = false;
@@ -47,78 +46,6 @@ function extractText(msg) {
     msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
     ''
   ).trim();
-}
-
-// Fungsi handle fitur ujian
-async function handleUjianWA(message, sock) {
-  const sender = message.key.remoteJid;
-  const text = extractText(message);
-
-  // ====== SIMPAN DATA UJIAN ======
-  if (text.startsWith("Ujian -")) {
-    const parts = text.split(" - ");
-    if (parts.length < 5) {
-      await sock.sendMessage(sender, { text: "⚠️ Format salah!\nContoh:\nUjian - Nama - Jenis - Juz - Keterangan" });
-      return true;
-    }
-    const [, nama, jenis, juz, keterangan] = parts;
-    const res = await axios.post(ujianAPI, {
-      mode: "simpan", nama, jenis, juz, keterangan
-    });
-    await sock.sendMessage(sender, { text: res.data.message });
-    return true;
-  }
-
-  // ====== EDIT DATA UJIAN ======
-  if (text.startsWith("Edit -")) {
-    const parts = text.split(" - ");
-    if (parts.length < 5) {
-      await sock.sendMessage(sender, { text: "⚠️ Format salah!\nContoh:\nEdit - Nama - Jenis - Juz - Keterangan" });
-      return true;
-    }
-    const [, nama, jenis, juz, keterangan] = parts;
-    const res = await axios.post(ujianAPI, {
-      mode: "edit", nama, jenis, juz, keterangan
-    });
-    await sock.sendMessage(sender, { text: res.data.message });
-    return true;
-  }
-
-  // ====== LIHAT DATA UJIAN ======
-  if (text.startsWith("Lihat")) {
-    let nama = null;
-    if (text.includes(" - ")) [, nama] = text.split(" - ");
-
-    const res = await axios.post(ujianAPI, { mode: "lihat", nama });
-    const data = res.data.data || [];
-
-    if (data.length === 0) {
-      await sock.sendMessage(sender, { text: `📭 Belum ada data ujian.` });
-    } else {
-      const hasil = data.map((r) => {
-        const [nama, ujian, juz, tanggalISO, status] = r;
-
-        const tanggalObj = new Date(tanggalISO);
-        const options = { day: 'numeric', month: 'long', year: 'numeric' };
-        const tanggalFormatted = tanggalObj.toLocaleDateString('id-ID', options);
-
-        return `*👤Nama:* ${nama}
-*📃Ujian:* ${ujian}
-*📖Juz:* ${juz}
-*📆Tanggal:* ${tanggalFormatted}
-*🏷Status:* ${status}`;
-      }).join("\n\n");
-
-      const pesan = nama
-        ? `📄 Data ujian untuk *${nama}*:\n\n${hasil}`
-        : `📄 *Daftar Santri Yang Telah Ujian*\n\n${hasil}`;
-
-      await sock.sendMessage(sender, { text: pesan });
-    }
-    return true;
-  }
-
-  return false;
 }
 
 // Fungsi utama
