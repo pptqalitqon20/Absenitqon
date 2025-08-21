@@ -139,8 +139,7 @@ async function startBot() {
       }
     });
 
-  // Helper: unwrap pesan yg dibungkus ephemeral/viewOnce/edit
-function getInnerMessage(msg) {
+ function getInnerMessage(msg) {
   return msg?.message?.ephemeralMessage?.message
       || msg?.message?.viewOnceMessage?.message
       || msg?.message?.viewOnceMessageV2?.message
@@ -189,9 +188,9 @@ sock.ev.on('messages.upsert', async (m) => {
       ''
     ).trim();
 
-    // Fallback mention *opsional* via ENV:
-    // Balas jika teks mengandung '@' + sebagian nomor bot (hindari spam).
-    // Aktifkan dengan set ENV: GROUP_MENTION_FALLBACK=1
+    // ====== Fallback heuristik opsional ======
+    // Balas jika teks mengandung '@' + digit (mirip mention), cocok dgn nomor bot.
+    // Aktifkan dg ENV: GROUP_MENTION_FALLBACK=1
     const botNumber = (sock.user?.id?.split(':')[0] || '');  // mis. 62812xxxx
     const looksLikeMentionByText =
       /@\d{6,}/.test(text) &&
@@ -199,11 +198,30 @@ sock.ev.on('messages.upsert', async (m) => {
 
     const allowFallback = process.env.GROUP_MENTION_FALLBACK === '1';
 
-    // Log bantu debug
-    console.log({ isGroup, isMentioned, isReplyToBot, allowFallback, looksLikeMentionByText, jid, text });
+    // ====== Opsi rapi: token mention via ENV (disarankan uji cepat) ======
+    // Set di Render: GROUP_MENTION_TOKEN=@40338836213933
+    const mentionToken = (process.env.GROUP_MENTION_TOKEN || '').trim();
+    const isTokenMention = isGroup && mentionToken && text.includes(mentionToken);
 
-    // Kebijakan: DM balas selalu; Grup balas jika mention OR reply OR fallback-heuristic aktif & cocok
-    const shouldReply = !isGroup || isMentioned || isReplyToBot || (isGroup && allowFallback && looksLikeMentionByText);
+    // Log bantu debug
+    console.log({
+      isGroup, isMentioned, isReplyToBot,
+      allowFallback, looksLikeMentionByText,
+      isTokenMention, jid, text
+    });
+
+    // Kebijakan: DM balas selalu; Grup balas jika:
+    // - mention resmi, atau
+    // - reply ke bot, atau
+    // - token mention (ENV), atau
+    // - fallback heuristik diaktifkan & cocok
+    const shouldReply =
+      !isGroup ||
+      isMentioned ||
+      isReplyToBot ||
+      isTokenMention ||
+      (isGroup && allowFallback && looksLikeMentionByText);
+
     if (!shouldReply) return;
 
     // Uji cepat di grup: /ping
@@ -234,7 +252,8 @@ sock.ev.on('messages.upsert', async (m) => {
   } catch (err) {
     console.error('❌ Handler upsert error:', err);
   }
-});  
+});
+
 
   } catch (err) {
     console.error('❌ Error init bot:', err);
