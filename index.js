@@ -164,7 +164,6 @@ sock.ev.on('messages.upsert', async (m) => {
   // 🔧 PERBAIKAN: Cara yang lebih akurat mendapatkan bot number
   let botNumber;
   if (sock.user?.id) {
-    // Ambil hanya nomor tanpa suffix
     botNumber = sock.user.id.replace(/:\d+/, '').replace('@s.whatsapp.net', '') + '@s.whatsapp.net';
   }
   
@@ -175,14 +174,14 @@ sock.ev.on('messages.upsert', async (m) => {
   const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
   console.log('📢 Mentioned JIDs:', mentionedJids);
   
-  // Cek apakah bot di-mention dengan beberapa cara
+  // Cek apakah bot di-mention
   const isMentioned = mentionedJids.some(jid => {
     const cleanJid = jid.replace('@s.whatsapp.net', '');
     const cleanBotNumber = botNumber ? botNumber.replace('@s.whatsapp.net', '') : '';
     return cleanJid === cleanBotNumber || jid === botNumber;
   });
   
-  // 🔧 PERBAIKAN: Deteksi reply yang lebih akurat
+  // 🔧 PERBAIKAN: Deteksi reply ke bot
   const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
   const isReplyToBot = quotedMsg?.participant === botNumber || 
                       quotedMsg?.remoteJid === botNumber ||
@@ -193,10 +192,9 @@ sock.ev.on('messages.upsert', async (m) => {
   console.log('  - Is Reply to Bot:', isReplyToBot);
   console.log('  - Quoted participant:', quotedMsg?.participant);
   console.log('  - Text:', trimmedText);
-  // 🧠 Tanya AI - PERBAIKAN: Kondisi yang lebih jelas
- const shouldRespond = !isGroup || isMentioned || isReplyToBot;
 
-  
+  // 🧠 Kondisi balas
+  const shouldRespond = !isGroup || isMentioned || isReplyToBot;
   console.log('🤔 Should respond?', shouldRespond);
   
   if (shouldRespond && trimmedText) {
@@ -209,7 +207,23 @@ sock.ev.on('messages.upsert', async (m) => {
       console.error('❌ Gagal membalas dari AI:', err);
     }
   }
-});
+}); // <-- END messages.upsert
+
+// >>>>>>>>>>>>> TAMBAHKAN BLOK INI <<<<<<<<<<<<<<
+} catch (err) {
+  console.error('❌ Error startBot:', err);
+  if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+    isReconnecting = true;
+    reconnectAttempts++;
+    console.log(`⏳ Restart dalam ${RECONNECT_INTERVAL / 1000}s... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+    setTimeout(() => {
+      isReconnecting = false;
+      startBot().catch(console.error);
+    }, RECONNECT_INTERVAL);
+  } else {
+    console.log('❌ Batas reconnect tercapai. Butuh restart manual.');
+  }
+}// <-- END function startBot
 
 // 🔧 TAMBAHAN: Function untuk mendapatkan bot number yang lebih akurat
 function getBotNumber(sock) {
