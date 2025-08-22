@@ -209,7 +209,6 @@ sock.ev.on('messages.upsert', async (m) => {
   }
 }); // <-- END messages.upsert
 
-// >>>>>>>>>>>>> TAMBAHKAN BLOK INI <<<<<<<<<<<<<<
 } catch (err) {
   console.error('❌ Error startBot:', err);
   if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
@@ -223,7 +222,8 @@ sock.ev.on('messages.upsert', async (m) => {
   } else {
     console.log('❌ Batas reconnect tercapai. Butuh restart manual.');
   }
-}// <-- END function startBot
+} // <-- END function startBot
+
 
 // 🔧 TAMBAHAN: Function untuk mendapatkan bot number yang lebih akurat
 function getBotNumber(sock) {
