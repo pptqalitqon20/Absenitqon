@@ -139,121 +139,116 @@ async function startBot() {
       }
     });
 
- function getInnerMessage(msg) {
-  return msg?.message?.ephemeralMessage?.message
-      || msg?.message?.viewOnceMessage?.message
-      || msg?.message?.viewOnceMessageV2?.message
-      || msg?.message?.editedMessage?.message
-      || msg?.message
-      || {};
-}
-// Normalisasi JID: buang suffix perangkat ":xx"
-const normJid = (j) => (j ? j.split(':')[0] + '@s.whatsapp.net' : '');
-
+// 📥 Event pesan masuk
 sock.ev.on('messages.upsert', async (m) => {
-  try {
-    const msg = m.messages?.[0];
-    if (!msg?.message || msg.key.fromMe) return;
+  const msg = m.messages[0];
+  if (!msg.message || msg.key.fromMe) return;
 
-    const jid = msg.key.remoteJid;
-    if (jid === 'status@broadcast' || jid?.endsWith?.('@newsletter')) return;
+  const isGroup = msg.key.remoteJid.endsWith('@g.us');
+  const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
+  const replyJid = isGroup ? msg.key.remoteJid : senderJid;
 
-    const isGroup = jid?.endsWith?.('@g.us');
-    const inner = getInnerMessage(msg);
+  if (isGroup) {
+    console.log('📢 Pesan dari grup:', msg.key.remoteJid);
+  }
 
-    // Ambil contextInfo dari berbagai tipe message (extText/image/video/doc)
-    const ctx =
-      inner.extendedTextMessage?.contextInfo ||
-      inner.imageMessage?.contextInfo ||
-      inner.videoMessage?.contextInfo ||
-      inner.documentMessage?.contextInfo ||
-      inner.buttonsMessage?.contextInfo ||
-      inner.interactiveResponseMessage?.contextInfo ||
-      {};
+  const text =
+    msg.message?.conversation ||
+    msg.message?.extendedTextMessage?.text ||
+    msg.message?.imageMessage?.caption ||
+    msg.message?.buttonsResponseMessage?.selectedButtonId ||
+    msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId || '';
 
-    const botBare = normJid(sock.user?.id);
-    const mentionedJids = (ctx.mentionedJid || []).map(normJid);
-    const isMentioned = mentionedJids.includes(botBare);
-
-    // Reply ke bot: ada quotedMessage & participant == bot
-    const isReplyToBot = !!ctx.quotedMessage && normJid(ctx.participant) === botBare;
-
-    // Ambil teks
-    const text = (
-      inner.conversation ||
-      inner.extendedTextMessage?.text ||
-      inner.imageMessage?.caption ||
-      inner.videoMessage?.caption ||
-      inner.documentMessage?.caption ||
-      ''
-    ).trim();
-
-    // ====== Fallback heuristik opsional ======
-    // Balas jika teks mengandung '@' + digit (mirip mention), cocok dgn nomor bot.
-    // Aktifkan dg ENV: GROUP_MENTION_FALLBACK=1
-    const botNumber = (sock.user?.id?.split(':')[0] || '');  // mis. 62812xxxx
-    const looksLikeMentionByText =
-      /@\d{6,}/.test(text) &&
-      ( text.includes(botNumber) || text.endsWith(botNumber.slice(-6)) );
-
-    const allowFallback = process.env.GROUP_MENTION_FALLBACK === '1';
-
-    // ====== Opsi rapi: token mention via ENV (disarankan uji cepat) ======
-    // Set di Render: GROUP_MENTION_TOKEN=@40338836213933
-    const mentionToken = (process.env.GROUP_MENTION_TOKEN || '').trim();
-    const isTokenMention = isGroup && mentionToken && text.includes(mentionToken);
-
-    // Log bantu debug
-    console.log({
-      isGroup, isMentioned, isReplyToBot,
-      allowFallback, looksLikeMentionByText,
-      isTokenMention, jid, text
-    });
-
-    // Kebijakan: DM balas selalu; Grup balas jika:
-    // - mention resmi, atau
-    // - reply ke bot, atau
-    // - token mention (ENV), atau
-    // - fallback heuristik diaktifkan & cocok
-    const shouldReply =
-      !isGroup ||
-      isMentioned ||
-      isReplyToBot ||
-      isTokenMention ||
-      (isGroup && allowFallback && looksLikeMentionByText);
-
-    if (!shouldReply) return;
-
-    // Uji cepat di grup: /ping
-    if (isGroup && text.trim() === '/ping') {
-      await sock.sendMessage(jid, { text: 'pong ✅' }, { quoted: msg });
-      return;
-    }
-
-    if (!text) {
-      await sock.sendMessage(jid, { text: 'Aku aktif ✅ (pesan tanpa teks).' }, { quoted: msg });
-      return;
-    }
-
-    // ===== AI sebagai handler utama + fallback =====
-    let replyText;
+  const trimmedText = typeof text === 'string' ? text.trim() : '';
+  
+  // 🔧 PERBAIKAN: Cara yang lebih akurat mendapatkan bot number
+  let botNumber;
+  if (sock.user?.id) {
+    // Ambil hanya nomor tanpa suffix
+    botNumber = sock.user.id.replace(/:\d+/, '').replace('@s.whatsapp.net', '') + '@s.whatsapp.net';
+  }
+  
+  console.log('🤖 Bot Number:', botNumber);
+  console.log('👤 Sender:', senderJid);
+  
+  // 🔧 PERBAIKAN: Deteksi mention yang lebih akurat
+  const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  console.log('📢 Mentioned JIDs:', mentionedJids);
+  
+  // Cek apakah bot di-mention dengan beberapa cara
+  const isMentioned = mentionedJids.some(jid => {
+    const cleanJid = jid.replace('@s.whatsapp.net', '');
+    const cleanBotNumber = botNumber ? botNumber.replace('@s.whatsapp.net', '') : '';
+    return cleanJid === cleanBotNumber || jid === botNumber;
+  });
+  
+  // 🔧 PERBAIKAN: Deteksi reply yang lebih akurat
+  const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
+  const isReplyToBot = quotedMsg?.participant === botNumber || 
+                      quotedMsg?.remoteJid === botNumber ||
+                      (quotedMsg?.stanzaId && quotedMsg?.participant?.includes(sock.user?.id?.split(':')[0]));
+  
+  console.log('🔍 Debug Info:');
+  console.log('  - Is Mentioned:', isMentioned);
+  console.log('  - Is Reply to Bot:', isReplyToBot);
+  console.log('  - Quoted participant:', quotedMsg?.participant);
+  console.log('  - Text:', trimmedText);
+  // 🧠 Tanya AI - PERBAIKAN: Kondisi yang lebih jelas
+  const shouldRespond = !isGroup  isMentioned  isReplyToBot;
+  
+  console.log('🤔 Should respond?', shouldRespond);
+  
+  if (shouldRespond && trimmedText) {
     try {
-      replyText = await tanyaAI(text, { from: jid, isGroup }) || '(AI tidak memberi jawaban)';
-    } catch (e) {
-      console.warn('⚠️ tanyaAI error, fallback echo:', e?.message || e);
-      replyText = `echo: ${text}`;
+      console.log('🤖 Memproses dengan AI:', trimmedText);
+      const jawaban = await tanyaAI(trimmedText);
+      await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+      console.log('✅ Berhasil membalas');
+    } catch (err) {
+      console.error('❌ Gagal membalas dari AI:', err);
     }
-    await sock.sendMessage(jid, { text: replyText }, { quoted: msg });
-
-    try {
-      const r = await (typeof tanyaReaksi === 'function' ? tanyaReaksi(text) : null);
-      if (r) await sock.sendMessage(jid, { react: { text: r, key: msg.key } });
-    } catch {}
-  } catch (err) {
-    console.error('❌ Handler upsert error:', err);
   }
 });
 
+// 🔧 TAMBAHAN: Function untuk mendapatkan bot number yang lebih akurat
+function getBotNumber(sock) {
+  if (!sock.user?.id) return null;
+  
+  // Berbagai format yang mungkin
+  let botId = sock.user.id;
+  
+  // Hapus suffix :xx jika ada
+  botId = botId.replace(/:\d+$/, '');
+  
+  // Tambahkan @s.whatsapp.net jika belum ada
+  if (!botId.includes('@')) {
+    botId += '@s.whatsapp.net';
+  }
+  
+  return botId;
+}
+
+// 🔧 TAMBAHAN: Function untuk debugging mention
+function debugMention(msg, botNumber) {
+  console.log('🐛 DEBUG MENTION:');
+  console.log('  - Bot Number:', botNumber);
+  console.log('  - Message Type:', Object.keys(msg.message || {}));
+  
+  const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
+  if (contextInfo) {
+    console.log('  - Context Info:', {
+      mentionedJid: contextInfo.mentionedJid,
+      participant: contextInfo.participant,
+      quotedMessage: !!contextInfo.quotedMessage
+    });
+  }
+  
+  // Cek apakah ada mention di text
+  const text = msg.message?.extendedTextMessage?.text  msg.message?.conversation  '';
+  const mentionPattern = /@\d+/g;
+  const mentionsInText = text.match(mentionPattern);
+  console.log('  - Mentions in text:', mentionsInText);
+}
 
   } catch (err) {
     console.error('❌ Error init bot:', err);
