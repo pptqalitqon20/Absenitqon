@@ -231,35 +231,34 @@ function getBotNumber(sock) {
 
 // 🔧 TAMBAHAN: Function untuk debugging mention
 function debugMention(msg, botNumber) {
-  console.log('🐛 DEBUG MENTION:');
-  console.log('  - Bot Number:', botNumber);
-  console.log('  - Message Type:', Object.keys(msg.message || {}));
-  
-  const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
-  if (contextInfo) {
-    console.log('  - Context Info:', {
-      mentionedJid: contextInfo.mentionedJid,
-      participant: contextInfo.participant,
-      quotedMessage: !!contextInfo.quotedMessage
-    });
-  }
-  
-  // Cek apakah ada mention di text
-const text = msg.message?.extendedTextMessage?.text 
-          || msg.message?.conversation 
-          || '';
+  try {
+    console.log('🐛 DEBUG MENTION:');
+    console.log('  - Bot Number:', botNumber);
+    console.log('  - Message Type:', Object.keys(msg.message || {}));
+    
+    const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
+    if (contextInfo) {
+      console.log('  - Context Info:', {
+        mentionedJid: contextInfo.mentionedJid,
+        participant: contextInfo.participant,
+        quotedMessage: !!contextInfo.quotedMessage
+      });
+    }
+    
+    // Cek apakah ada mention di text
+    const text = msg.message?.extendedTextMessage?.text 
+              || msg.message?.conversation 
+              || '';
 
-const mentionPattern = /@\d+/g;
-const mentionsInText = text.match(mentionPattern) || [];
-console.log('  - Mentions in text:', mentionsInText);
-
+    const mentionPattern = /@\d+/g;
+    const mentionsInText = text.match(mentionPattern) || [];
+    console.log('  - Mentions in text:', mentionsInText);
 
   } catch (err) {
-    console.error('❌ Error init bot:', err);
-    console.log(`⏳ Restart otomatis dalam ${RECONNECT_INTERVAL / 1000} detik...`);
-    setTimeout(startBot, RECONNECT_INTERVAL);
+    console.error('❌ Error debugMention:', err);
   }
 }
+
 
 // ======================= bootstrap =======================
 (async () => {
