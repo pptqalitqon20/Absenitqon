@@ -223,6 +223,7 @@ sock.ev.on('messages.upsert', async (m) => {
     console.log('❌ Batas reconnect tercapai. Butuh restart manual.');
   }
 } // <-- END function startBot
+} // <-- END function startBot
 
 
 // 🔧 TAMBAHAN: Function untuk mendapatkan bot number yang lebih akurat
