@@ -194,7 +194,8 @@ sock.ev.on('messages.upsert', async (m) => {
   console.log('  - Quoted participant:', quotedMsg?.participant);
   console.log('  - Text:', trimmedText);
   // 🧠 Tanya AI - PERBAIKAN: Kondisi yang lebih jelas
-  const shouldRespond = !isGroup  isMentioned  isReplyToBot;
+ const shouldRespond = !isGroup && isMentioned && isReplyToBot;
+
   
   console.log('🤔 Should respond?', shouldRespond);
   
