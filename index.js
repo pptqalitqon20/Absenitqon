@@ -245,11 +245,14 @@ function debugMention(msg, botNumber) {
   }
   
   // Cek apakah ada mention di text
-  const text = msg.message?.extendedTextMessage?.text  msg.message?.conversation  '';
-  const mentionPattern = /@\d+/g;
-  const mentionsInText = text.match(mentionPattern);
-  console.log('  - Mentions in text:', mentionsInText);
-}
+const text = msg.message?.extendedTextMessage?.text 
+          || msg.message?.conversation 
+          || '';
+
+const mentionPattern = /@\d+/g;
+const mentionsInText = text.match(mentionPattern) || [];
+console.log('  - Mentions in text:', mentionsInText);
+
 
   } catch (err) {
     console.error('❌ Error init bot:', err);
