@@ -17,7 +17,6 @@ const { tanyaAI, tanyaReaksi } = require('./handlers/ai');
 let setSocketInstance = () => {};
 let startCronJobs = () => {};
 
-
 // ======================= konstanta =======================
 const AUTH_FOLDER = process.env.AUTH_FOLDER || './auth_info_baileys';
 const MAX_RECONNECT_ATTEMPTS = Number(process.env.MAX_RECONNECT_ATTEMPTS || 5);
@@ -26,6 +25,65 @@ const RECONNECT_INTERVAL = Number(process.env.RECONNECT_INTERVAL || 10_000);
 // state reconnect
 let isReconnecting = false;
 let reconnectAttempts = 0;
+
+// ======================= UTILITY FUNCTIONS - PINDAH KE SINI ======================= 
+
+// Function untuk normalize JID (mengatasi perbedaan format @lid vs @s.whatsapp.net)
+function normalizeJID(jid) {
+  if (!jid) return '';
+  
+  // Hapus semua suffix dan ambil hanya nomor
+  let phoneNumber = jid.replace(/@.*$/, ''); // Hapus @s.whatsapp.net, @lid, dll
+  phoneNumber = phoneNumber.replace(/:\d+$/, ''); // Hapus :xx jika ada
+  
+  return phoneNumber;
+}
+
+// Function untuk mendapatkan bot number yang lebih reliable
+function getBotNumber(sock) {
+  if (!sock.user?.id) return null;
+  
+  let botId = sock.user.id;
+  // Hapus suffix :xx jika ada
+  botId = botId.replace(/:\d+$/, '');
+  
+  // Pastikan format @s.whatsapp.net
+  if (!botId.includes('@')) {
+    botId += '@s.whatsapp.net';
+  }
+  
+  return botId;
+}
+
+// Function untuk debugging mention
+function debugMention(msg, botNumber) {
+  try {
+    console.log('🐛 DEBUG MENTION:');
+    console.log('  - Bot Number:', botNumber);
+    console.log('  - Message Type:', Object.keys(msg.message || {}));
+    
+    const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
+    if (contextInfo) {
+      console.log('  - Context Info:', {
+        mentionedJid: contextInfo.mentionedJid,
+        participant: contextInfo.participant,
+        quotedMessage: !!contextInfo.quotedMessage
+      });
+    }
+    
+    // Cek apakah ada mention di text
+    const text = msg.message?.extendedTextMessage?.text 
+              || msg.message?.conversation 
+              || '';
+
+    const mentionPattern = /@\d+/g;
+    const mentionsInText = text.match(mentionPattern) || [];
+    console.log('  - Mentions in text:', mentionsInText);
+
+  } catch (err) {
+    console.error('❌ Error debugMention:', err);
+  }
+}
 
 // ======================= seed session dari ENV =======================
 if (process.env.SESSION_B64) {
@@ -134,146 +192,111 @@ async function startBot() {
             startBot().catch(console.error);
           }, RECONNECT_INTERVAL);
         } else {
-          console.log('❌ Gagal reconnect. Restart manual diperlukan.');
+          console.log('❌ Batas reconnect tercapai. Butuh restart manual.');
         }
       }
     });
 
-// 📥 Event pesan masuk
-sock.ev.on('messages.upsert', async (m) => {
-  const msg = m.messages[0];
-  if (!msg.message || msg.key.fromMe) return;
+    // 📥 EVENT PESAN MASUK - DIPINDAH KE DALAM startBot()
+    sock.ev.on('messages.upsert', async (m) => {
+      const msg = m.messages[0];
+      if (!msg.message || msg.key.fromMe) return;
 
-  const isGroup = msg.key.remoteJid.endsWith('@g.us');
-  const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
-  const replyJid = isGroup ? msg.key.remoteJid : senderJid;
+      const isGroup = msg.key.remoteJid.endsWith('@g.us');
+      const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
+      const replyJid = isGroup ? msg.key.remoteJid : senderJid;
 
-  if (isGroup) {
-    console.log('📢 Pesan dari grup:', msg.key.remoteJid);
-  }
+      if (isGroup) {
+        console.log('📢 Pesan dari grup:', msg.key.remoteJid);
+      }
 
-  const text =
-    msg.message?.conversation ||
-    msg.message?.extendedTextMessage?.text ||
-    msg.message?.imageMessage?.caption ||
-    msg.message?.buttonsResponseMessage?.selectedButtonId ||
-    msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId || '';
+      const text =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption ||
+        msg.message?.buttonsResponseMessage?.selectedButtonId ||
+        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId || '';
 
-  const trimmedText = typeof text === 'string' ? text.trim() : '';
-  
-  // 🔧 PERBAIKAN: Cara yang lebih akurat mendapatkan bot number
-  let botNumber;
-  if (sock.user?.id) {
-    botNumber = sock.user.id.replace(/:\d+/, '').replace('@s.whatsapp.net', '') + '@s.whatsapp.net';
-  }
-  
-  console.log('🤖 Bot Number:', botNumber);
-  console.log('👤 Sender:', senderJid);
-  
-  // 🔧 PERBAIKAN: Deteksi mention yang lebih akurat
-  const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-  console.log('📢 Mentioned JIDs:', mentionedJids);
-  
-  // Cek apakah bot di-mention
-  const isMentioned = mentionedJids.some(jid => {
-    const cleanJid = jid.replace('@s.whatsapp.net', '');
-    const cleanBotNumber = botNumber ? botNumber.replace('@s.whatsapp.net', '') : '';
-    return cleanJid === cleanBotNumber || jid === botNumber;
-  });
-  
-  // 🔧 PERBAIKAN: Deteksi reply ke bot
-  const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
-  const isReplyToBot = quotedMsg?.participant === botNumber || 
-                      quotedMsg?.remoteJid === botNumber ||
-                      (quotedMsg?.stanzaId && quotedMsg?.participant?.includes(sock.user?.id?.split(':')[0]));
-  
-  console.log('🔍 Debug Info:');
-  console.log('  - Is Mentioned:', isMentioned);
-  console.log('  - Is Reply to Bot:', isReplyToBot);
-  console.log('  - Quoted participant:', quotedMsg?.participant);
-  console.log('  - Text:', trimmedText);
-
-  // 🧠 Kondisi balas
-  const shouldRespond = !isGroup || isMentioned || isReplyToBot;
-  console.log('🤔 Should respond?', shouldRespond);
-  
-  if (shouldRespond && trimmedText) {
-    try {
-      console.log('🤖 Memproses dengan AI:', trimmedText);
-      const jawaban = await tanyaAI(trimmedText);
-      await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
-      console.log('✅ Berhasil membalas');
-    } catch (err) {
-      console.error('❌ Gagal membalas dari AI:', err);
-    }
-  }
-}); // <-- END messages.upsert
-
-} catch (err) {
-  console.error('❌ Error startBot:', err);
-  if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-    isReconnecting = true;
-    reconnectAttempts++;
-    console.log(`⏳ Restart dalam ${RECONNECT_INTERVAL / 1000}s... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-    setTimeout(() => {
-      isReconnecting = false;
-      startBot().catch(console.error);
-    }, RECONNECT_INTERVAL);
-  } else {
-    console.log('❌ Batas reconnect tercapai. Butuh restart manual.');
-  }
-} // <-- END function startBot
-} // <-- END function startBot
-
-
-// 🔧 TAMBAHAN: Function untuk mendapatkan bot number yang lebih akurat
-function getBotNumber(sock) {
-  if (!sock.user?.id) return null;
-  
-  // Berbagai format yang mungkin
-  let botId = sock.user.id;
-  
-  // Hapus suffix :xx jika ada
-  botId = botId.replace(/:\d+$/, '');
-  
-  // Tambahkan @s.whatsapp.net jika belum ada
-  if (!botId.includes('@')) {
-    botId += '@s.whatsapp.net';
-  }
-  
-  return botId;
-}
-
-// 🔧 TAMBAHAN: Function untuk debugging mention
-function debugMention(msg, botNumber) {
-  try {
-    console.log('🐛 DEBUG MENTION:');
-    console.log('  - Bot Number:', botNumber);
-    console.log('  - Message Type:', Object.keys(msg.message || {}));
-    
-    const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
-    if (contextInfo) {
-      console.log('  - Context Info:', {
-        mentionedJid: contextInfo.mentionedJid,
-        participant: contextInfo.participant,
-        quotedMessage: !!contextInfo.quotedMessage
+      const trimmedText = typeof text === 'string' ? text.trim() : '';
+      
+      // 🔧 Dapatkan bot number dengan lebih reliable
+      const botNumber = getBotNumber(sock);
+      
+      console.log('🤖 Bot Number:', botNumber);
+      console.log('👤 Sender:', senderJid);
+      
+      // 🔧 PERBAIKAN UTAMA: Deteksi mention yang lebih akurat
+      const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+      console.log('📢 Mentioned JIDs:', mentionedJids);
+      
+      // Method 1: Cek berdasarkan mentionedJid array (normalize comparison)
+      const botNormalized = normalizeJID(botNumber);
+      const isMentionedByJid = mentionedJids.some(jid => {
+        const normalizedMention = normalizeJID(jid);
+        console.log(`🔍 Comparing: ${normalizedMention} === ${botNormalized}`);
+        return normalizedMention === botNormalized;
       });
-    }
-    
-    // Cek apakah ada mention di text
-    const text = msg.message?.extendedTextMessage?.text 
-              || msg.message?.conversation 
-              || '';
+      
+      // Method 2: Cek mention di text content
+      const mentionPattern = /@(\d+)/g;
+      let isMentionedByText = false;
+      let match;
+      while ((match = mentionPattern.exec(text)) !== null) {
+        const mentionedNumber = match[1];
+        if (mentionedNumber === botNormalized) {
+          isMentionedByText = true;
+          console.log('🎯 Found bot mention in text:', mentionedNumber);
+          break;
+        }
+      }
+      
+      const isMentioned = isMentionedByJid || isMentionedByText;
+      
+      // 🔧 Deteksi reply ke bot (tetap sama seperti kode lama Anda)
+      const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
+      const isReplyToBot = quotedMsg?.participant === botNumber || 
+                          quotedMsg?.remoteJid === botNumber ||
+                          (quotedMsg?.stanzaId && quotedMsg?.participant?.includes(sock.user?.id?.split(':')[0]));
+      
+      console.log('🔍 Debug Info:');
+      console.log('  - Is Mentioned (JID method):', isMentionedByJid);
+      console.log('  - Is Mentioned (Text method):', isMentionedByText);
+      console.log('  - Is Mentioned (Final):', isMentioned);
+      console.log('  - Is Reply to Bot:', isReplyToBot);
+      console.log('  - Quoted participant:', quotedMsg?.participant);
+      console.log('  - Text:', trimmedText);
 
-    const mentionPattern = /@\d+/g;
-    const mentionsInText = text.match(mentionPattern) || [];
-    console.log('  - Mentions in text:', mentionsInText);
+      // 🧠 Kondisi balas (sama seperti kode lama Anda)
+      const shouldRespond = !isGroup || isMentioned || isReplyToBot;
+      console.log('🤔 Should respond?', shouldRespond);
+      
+      if (shouldRespond && trimmedText) {
+        try {
+          console.log('🤖 Memproses dengan AI:', trimmedText);
+          const jawaban = await tanyaAI(trimmedText);
+          await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
+          console.log('✅ Berhasil membalas');
+        } catch (err) {
+          console.error('❌ Gagal membalas dari AI:', err);
+        }
+      }
+    });
 
   } catch (err) {
-    console.error('❌ Error debugMention:', err);
+    console.error('❌ Error startBot:', err);
+    if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      isReconnecting = true;
+      reconnectAttempts++;
+      console.log(`⏳ Restart dalam ${RECONNECT_INTERVAL / 1000}s... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+      setTimeout(() => {
+        isReconnecting = false;
+        startBot().catch(console.error);
+      }, RECONNECT_INTERVAL);
+    } else {
+      console.log('❌ Batas reconnect tercapai. Butuh restart manual.');
+    }
   }
 }
-
 
 // ======================= bootstrap =======================
 (async () => {
