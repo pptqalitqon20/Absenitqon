@@ -1,325 +1,257 @@
-// ======================= deps =======================
+require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
+const chalk = require("chalk");
+const express = require("express");
+const qrcode = require("qrcode-terminal");
+const NodeCache = require("node-cache");
+const { Boom } = require("@hapi/boom");
+const { MongoClient } = require("mongodb");
 const {
-  makeWASocket,
+  default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
-const P = require('pino');
-const fs = require('fs');
-const axios = require('axios'); // kalau tidak dipakai, boleh dihapus
-const path = require('path');
-const { execSync } = require('child_process');
-const { tanyaAI, tanyaReaksi } = require('./handlers/ai');
+} = require("baileys");
 
-// Fitur tambahan (optional)
-let setSocketInstance = () => {};
-let startCronJobs = () => {};
+// Router pesan utama
+const MessagesUpsert = require("./src/message");
 
-// ======================= konstanta =======================
-const AUTH_FOLDER = process.env.AUTH_FOLDER || './auth_info_baileys';
-const MAX_RECONNECT_ATTEMPTS = Number(process.env.MAX_RECONNECT_ATTEMPTS || 5);
-const RECONNECT_INTERVAL = Number(process.env.RECONNECT_INTERVAL || 10_000);
+// GOOGLE SHEETS SERVICE
+const { sheetsService } = require("./services/sheetsService");
 
-// state reconnect
-let isReconnecting = false;
-let reconnectAttempts = 0;
+// AI SERVICE (Fitur Keislaman)
+const { initializeAIService } = require("./services/aiService");
 
-// ======================= UTILITY FUNCTIONS - PINDAH KE SINI ======================= 
+// ===============================
+// EXPRESS SERVER KEEP ALIVE
+// ===============================
+const app = express();
+app.get("/", (req, res) => res.send("PPTQ AL-ITQON BOT RUNNING"));
+app.listen(3000, () =>
+  console.log(chalk.green("[Server] Running on port 3000"))
+);
 
-// Function untuk normalize JID (mengatasi perbedaan format @lid vs @s.whatsapp.net)
-function normalizeJID(jid) {
-  if (!jid) return '';
-  
-  // Hapus semua suffix dan ambil hanya nomor
-  let phoneNumber = jid.replace(/@.*$/, ''); // Hapus @s.whatsapp.net, @lid, dll
-  phoneNumber = phoneNumber.replace(/:\d+$/, ''); // Hapus :xx jika ada
-  
-  return phoneNumber;
-}
+// ===============================
+// STORE SEDERHANA
+// ===============================
+const store = {
+  messages: {},
+  contacts: {},
+  groupMetadata: {},
+  presences: {}
+};
 
-// Function untuk mendapatkan bot number yang lebih reliable
-function getBotNumber(sock) {
-  if (!sock.user?.id) return null;
-  
-  let botId = sock.user.id;
-  // Hapus suffix :xx jika ada
-  botId = botId.replace(/:\d+$/, '');
-  
-  // Pastikan format @s.whatsapp.net
-  if (!botId.includes('@')) {
-    botId += '@s.whatsapp.net';
+// ===============================
+// KONSTAN PATH AUTH
+// ===============================
+const AUTH_DIR = path.join(__dirname, "auth");
+
+// ===============================
+// FUNGSI BANTU MONGODB
+// ===============================
+async function getMongoClient() {
+  const uri = process.env.MONGO_URI;
+  if (!uri) {
+    console.log(chalk.yellow("⚠️ MONGO_URI kosong, session hanya disimpan di file."));
+    return null;
   }
-  
-  return botId;
+
+  const client = new MongoClient(uri);
+  await client.connect();
+  return client;
 }
 
-// Function untuk debugging mention
-function debugMention(msg, botNumber) {
+async function restoreAuthFromMongo(sessionName) {
+  const client = await getMongoClient().catch((err) => {
+    console.log(chalk.red("❌ Gagal konek Mongo untuk restore session:"), err.message);
+    return null;
+  });
+  if (!client) return;
+
   try {
-    console.log('🐛 DEBUG MENTION:');
-    console.log('  - Bot Number:', botNumber);
-    console.log('  - Message Type:', Object.keys(msg.message || {}));
-    
-    const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
-    if (contextInfo) {
-      console.log('  - Context Info:', {
-        mentionedJid: contextInfo.mentionedJid,
-        participant: contextInfo.participant,
-        quotedMessage: !!contextInfo.quotedMessage
-      });
+    const dbName = process.env.MONGO_DB_NAME || "whatsapp_bot";
+    const collName = process.env.APP_STORE || "baileys_auth_files";
+    const db = client.db(dbName);
+    const col = db.collection(collName);
+
+    const docs = await col.find({ session: sessionName }).toArray();
+
+    if (!docs.length) {
+      console.log(chalk.yellow("ℹ️ Tidak ada session di Mongo, mulai login baru."));
+      return;
     }
-    
-    // Cek apakah ada mention di text
-    const text = msg.message?.extendedTextMessage?.text 
-              || msg.message?.conversation 
-              || '';
 
-    const mentionPattern = /@\d+/g;
-    const mentionsInText = text.match(mentionPattern) || [];
-    console.log('  - Mentions in text:', mentionsInText);
+    await fs.promises.mkdir(AUTH_DIR, { recursive: true });
 
+    for (const doc of docs) {
+      const filePath = path.join(AUTH_DIR, doc.filename);
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.promises.writeFile(filePath, doc.content, "utf8");
+    }
+
+    console.log(chalk.green("✅ Session berhasil direstore dari Mongo ke folder auth."));
   } catch (err) {
-    console.error('❌ Error debugMention:', err);
+    console.log(chalk.red("❌ Error restoreAuthFromMongo:"), err.message);
+  } finally {
+    await client.close();
   }
 }
 
-// ======================= seed session dari ENV =======================
-if (process.env.SESSION_B64) {
-  // bersihkan agar overwrite bersih
-  if (fs.existsSync(AUTH_FOLDER)) {
-    fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-    console.log('🧹 Bersih-bersih folder auth (overwrite dari ENV)');
-  }
-  fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+async function saveAuthToMongo(sessionName) {
+  const client = await getMongoClient().catch((err) => {
+    console.log(chalk.red("❌ Gagal konek Mongo untuk simpan session:"), err.message);
+    return null;
+  });
+  if (!client) return;
 
-  const buf = Buffer.from(process.env.SESSION_B64, 'base64');
-  const isGzip = buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b;
-
-  if (isGzip) {
-    const tmpTar = path.join(__dirname, 'auth_session.tgz');
-    fs.writeFileSync(tmpTar, buf);
-    try {
-      execSync(`tar -xzf "${tmpTar}"`, { stdio: 'inherit' });
-      if (!fs.existsSync(AUTH_FOLDER)) {
-        // Cari folder yang berisi creds.json kalau nama folder di arsip beda
-        const candidates = fs.readdirSync(__dirname)
-          .map(n => path.join(__dirname, n))
-          .filter(p => fs.existsSync(path.join(p, 'creds.json')) && fs.statSync(p).isDirectory());
-        if (candidates[0]) fs.renameSync(candidates[0], AUTH_FOLDER);
-        else throw new Error('Arsip ENV tidak mengandung folder dengan creds.json');
-      }
-      console.log('🔐 Session (folder) dipulihkan dari ENV ✅');
-    } finally {
-      try { fs.unlinkSync(tmpTar); } catch {}
-    }
-  } else {
-    const sessionFile = path.join(AUTH_FOLDER, 'creds.json');
-    fs.writeFileSync(sessionFile, buf);
-    try { JSON.parse(buf.toString('utf8')); }
-    catch { console.warn('⚠️ SESSION_B64 bukan JSON valid? Pastikan ini isi creds.json mentah.'); }
-    console.log('🔐 Session (creds.json) ditanam dari ENV ✅');
-  }
-}
-
-// ======================= util =======================
-function extractText(msg) {
-  return (
-    msg.message?.conversation ||
-    msg.message?.extendedTextMessage?.text ||
-    msg.message?.imageMessage?.caption ||
-    msg.message?.buttonsResponseMessage?.selectedButtonId ||
-    msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
-    ''
-  ).trim();
-}
-
-// ======================= main bot =======================
-async function startBot() {
   try {
-    if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+    const dbName = process.env.MONGO_DB_NAME || "whatsapp_bot";
+    const collName = process.env.APP_STORE || "baileys_auth_files";
+    const db = client.db(dbName);
+    const col = db.collection(collName);
 
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
-    const { version } = await fetchLatestBaileysVersion();
+    if (!fs.existsSync(AUTH_DIR)) {
+      console.log(chalk.yellow("ℹ️ Folder auth belum ada, tidak ada yang disimpan ke Mongo."));
+      return;
+    }
 
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: true,
-      logger: P({ level: 'silent' }),
-      version,
-      browser: ['MyBot', 'Chrome', '1.0.0'],
-      markOnlineOnConnect: false,
-      syncFullHistory: false,
-      connectTimeoutMs: 30_000,
-      keepAliveIntervalMs: 25_000,
-      getMessage: async () => null
-    });
-
-    globalThis.sock = sock;
-    try { if (typeof setSocketInstance === 'function') setSocketInstance(sock); } catch {}
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-      if (qr) console.log('🔑 QR tersedia. Scan via WhatsApp.');
-      if (connection === 'open') {
-        console.log('🤖 Bot tersambung!');
-        console.log(`👤 Login sebagai: ${sock.user?.id || 'unknown'}`);
-        reconnectAttempts = 0;
-        try { if (typeof startCronJobs === 'function') startCronJobs(); } catch {}
-      }
-      if (connection === 'close') {
-        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-        console.log(`📴 Close. Code: ${reason} (${DisconnectReason[reason] || 'Unknown'})`);
-
-        if (reason === DisconnectReason.connectionReplaced) {
-          console.log('🔁 Session digantikan. Exit agar platform restart bersih.');
-          process.exit(0);
-        }
-
-        if (reason === DisconnectReason.loggedOut) {
-          console.log('🧹 Session logout. Hapus folder auth & start ulang.');
-          try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch {}
-          return startBot();
-        }
-
-        if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          isReconnecting = true;
-          reconnectAttempts++;
-          console.log(`⏳ Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-          setTimeout(() => {
-            isReconnecting = false;
-            startBot().catch(console.error);
-          }, RECONNECT_INTERVAL);
+    // helper rekursif baca semua file di AUTH_DIR
+    async function walk(dir) {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      const files = [];
+      for (const e of entries) {
+        const resPath = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          files.push(...(await walk(resPath)));
         } else {
-          console.log('❌ Batas reconnect tercapai. Butuh restart manual.');
+          files.push(resPath);
         }
       }
-    });
-
-    // 📥 EVENT PESAN MASUK - DIPINDAH KE DALAM startBot()
-    sock.ev.on('messages.upsert', async (m) => {
-      const msg = m.messages[0];
-      if (!msg.message || msg.key.fromMe) return;
-
-      const isGroup = msg.key.remoteJid.endsWith('@g.us');
-      const senderJid = isGroup ? msg.key.participant : msg.key.remoteJid;
-      const replyJid = isGroup ? msg.key.remoteJid : senderJid;
-
-      if (isGroup) {
-        console.log('📢 Pesan dari grup:', msg.key.remoteJid);
-      }
-
-      const text =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption ||
-        msg.message?.buttonsResponseMessage?.selectedButtonId ||
-        msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId || '';
-
-      const trimmedText = typeof text === 'string' ? text.trim() : '';
-      
-      // 🔧 Dapatkan bot number dengan lebih reliable
-      const botNumber = getBotNumber(sock);
-      
-      console.log('🤖 Bot Number:', botNumber);
-      console.log('👤 Sender:', senderJid);
-      
-      // 🔧 PERBAIKAN UTAMA: Deteksi mention yang lebih akurat
-      const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      console.log('📢 Mentioned JIDs:', mentionedJids);
-      
-      // Method 1: Cek berdasarkan mentionedJid array (normalize comparison)
-      const botNormalized = normalizeJID(botNumber);
-      const isMentionedByJid = mentionedJids.some(jid => {
-        const normalizedMention = normalizeJID(jid);
-        console.log(`🔍 Comparing: ${normalizedMention} === ${botNormalized}`);
-        return normalizedMention === botNormalized;
-      });
-      
-      // Method 2: Cek mention di text content
-      const mentionPattern = /@(\d+)/g;
-      let isMentionedByText = false;
-      let match;
-      while ((match = mentionPattern.exec(text)) !== null) {
-        const mentionedNumber = match[1];
-        if (mentionedNumber === botNormalized) {
-          isMentionedByText = true;
-          console.log('🎯 Found bot mention in text:', mentionedNumber);
-          break;
-        }
-      }
-      
-      const isMentioned = isMentionedByJid || isMentionedByText;
-      
-      // 🔧 Deteksi reply ke bot (tetap sama seperti kode lama Anda)
-      const quotedMsg = msg.message?.extendedTextMessage?.contextInfo;
-      const isReplyToBot = quotedMsg?.participant === botNumber || 
-                          quotedMsg?.remoteJid === botNumber ||
-                          (quotedMsg?.stanzaId && quotedMsg?.participant?.includes(sock.user?.id?.split(':')[0]));
-      
-      console.log('🔍 Debug Info:');
-      console.log('  - Is Mentioned (JID method):', isMentionedByJid);
-      console.log('  - Is Mentioned (Text method):', isMentionedByText);
-      console.log('  - Is Mentioned (Final):', isMentioned);
-      console.log('  - Is Reply to Bot:', isReplyToBot);
-      console.log('  - Quoted participant:', quotedMsg?.participant);
-      console.log('  - Text:', trimmedText);
-
-      // 🧠 Kondisi balas (sama seperti kode lama Anda)
-      const shouldRespond = !isGroup || isMentioned || isReplyToBot;
-      console.log('🤔 Should respond?', shouldRespond);
-      
-      if (shouldRespond && trimmedText) {
-        try {
-          console.log('🤖 Memproses dengan AI:', trimmedText);
-          const jawaban = await tanyaAI(trimmedText);
-          await sock.sendMessage(replyJid, { text: jawaban }, { quoted: msg });
-          console.log('✅ Berhasil membalas');
-        } catch (err) {
-          console.error('❌ Gagal membalas dari AI:', err);
-        }
-      }
-    });
-
-  } catch (err) {
-    console.error('❌ Error startBot:', err);
-    if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-      isReconnecting = true;
-      reconnectAttempts++;
-      console.log(`⏳ Restart dalam ${RECONNECT_INTERVAL / 1000}s... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-      setTimeout(() => {
-        isReconnecting = false;
-        startBot().catch(console.error);
-      }, RECONNECT_INTERVAL);
-    } else {
-      console.log('❌ Batas reconnect tercapai. Butuh restart manual.');
+      return files;
     }
+
+    const files = await walk(AUTH_DIR);
+    const ops = [];
+
+    for (const file of files) {
+      const rel = path.relative(AUTH_DIR, file); // nama file relatif
+      const content = await fs.promises.readFile(file, "utf8");
+
+      ops.push({
+        updateOne: {
+          filter: { session: sessionName, filename: rel },
+          update: { $set: { session: sessionName, filename: rel, content } },
+          upsert: true
+        }
+      });
+    }
+
+    if (ops.length) {
+      await col.bulkWrite(ops);
+      console.log(chalk.green(`✅ Session tersimpan ke Mongo (${files.length} file).`));
+    } else {
+      console.log(chalk.yellow("ℹ️ Tidak ada file auth yang disimpan ke Mongo."));
+    }
+  } catch (err) {
+    console.log(chalk.red("❌ Error saveAuthToMongo:"), err.message);
+  } finally {
+    await client.close();
   }
 }
 
-// ======================= bootstrap =======================
-(async () => {
-  console.log('⏳ Menunggu 20 detik agar koneksi lama benar-benar mati...');
-  await new Promise(r => setTimeout(r, 20_000));
-  startBot();
-})();
-
-// HTTP keep-alive (untuk health check/anti-sleep)
-require('http').createServer((_, res) => {
-  res.end('Bot WhatsApp aktif!');
-}).listen(process.env.PORT || 3000);
-
-// SIGTERM (graceful shutdown)
-process.on('SIGTERM', async () => {
-  console.log('👋 SIGTERM diterima. Menutup koneksi...');
-  if (globalThis.sock?.ws?.close) {
-    try { await globalThis.sock.ws.close(); console.log('✅ Koneksi ditutup'); }
-    catch (err) { console.error('❌ Gagal tutup koneksi:', err); }
+// ===============================
+// START BOT
+// ===============================
+async function startBot() {
+  // INIT GOOGLE SHEETS
+  console.log(chalk.cyan("🔧 Initializing Google Sheets..."));
+  try {
+    await sheetsService.initialize(
+       path.join(__dirname, process.env.GOOGLE_SERVICE_ACCOUNT_PATH),
+       process.env.GOOGLE_SHEET_ID
+   );
+    console.log(chalk.green("✅ Google Sheets siap"));
+  } catch (err) {
+    console.error("❌ Google Sheets error:", err.message || err);
+    console.log(
+      chalk.yellow("Bot tetap jalan, namun fitur hafalan/rekap mungkin error.")
+    );
   }
-  process.exit(0);
-});
 
-// Error global
-process.on('uncaughtException', err => console.error('🚨 Uncaught Exception:', err));
-process.on('unhandledRejection', err => console.error('🚨 Unhandled Rejection:', err));
+  // INIT AI SERVICE
+  const AI_KEY = process.env.OPENROUTER_API_KEY || "";
+  if (!AI_KEY) {
+    console.log(chalk.red("❌ OPENROUTER_API_KEY tidak ditemukan di .env"));
+    console.log(chalk.yellow("Fitur Keislaman (AI) dinonaktifkan."));
+  }
+  const aiService = initializeAIService(AI_KEY);
+
+  // Nama session
+  const sessionName = process.env.APP_SESSION || "pptq-session";
+
+  // 1) Restore session dari Mongo ke folder auth
+  await restoreAuthFromMongo(sessionName);
+
+  // 2) Load auth Baileys dari folder auth
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+
+  const { version } = await fetchLatestBaileysVersion();
+  const msgRetryCounterCache = new NodeCache();
+
+  const sock = makeWASocket({
+    version,
+    printQRInTerminal: false,
+    auth: state,
+    msgRetryCounterCache,
+    syncFullHistory: false,
+    browser: ["PPTQ AL-ITQON", "Chrome", "1.0"],
+  });
+
+  // Setiap creds berubah → simpan ke file lalu ke Mongo
+  sock.ev.on("creds.update", async () => {
+    await saveCreds();
+    await saveAuthToMongo(sessionName);
+  });
+
+  // CONNECTION UPDATE
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      console.log(chalk.yellow("🔑 Scan QR (jika muncul):"));
+      qrcode.generate(qr, { small: true });
+    }
+
+    if (connection === "open") {
+      console.log(
+        chalk.green("📱 BOT TERHUBUNG SEBAGAI:"),
+        sock.user?.id
+      );
+    }
+
+    if (connection === "close") {
+      const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
+      console.log("💥 Connection closed:", reason, DisconnectReason[reason]);
+
+      if (reason !== DisconnectReason.loggedOut) {
+        console.log("🔁 Reconnecting...");
+        startBot().catch((err) =>
+          console.error("❌ Error saat reconnect:", err)
+        );
+      } else {
+        console.log("🚪 Logged out. Kalau mau login ulang, hapus dokumen session di Mongo.");
+      }
+    }
+  });
+
+  // ALL MESSAGES → ROUTER
+  sock.ev.on("messages.upsert", async (message) => {
+    await MessagesUpsert(sock, message, store, aiService);
+  });
+}
+
+// Jalankan bot
+startBot().catch((err) => {
+  console.error("❌ Fatal error startBot:", err);
+});
