@@ -1,0 +1,650 @@
+// naze.js - Router khusus BOT PPTQ AL-ITQON
+
+const { handleMenu } = require("./lib/menu");
+const { handleAllMenu } = require("./lib/allmenu");
+const { sendButtonMsg } = require("./lib/sendButton");
+const { handleConverter } = require('./handlers/converterHandler');
+const { handleAIQuery } = require("./handlers/aiHandler");
+const { sendStruktur, sendVisiMisi, sendProfil } = require("./lib/pptq");
+const {
+  startHafalanFlow,
+  handleHafalanReply,
+  handleHafalanSelection,
+  sendProgramKetahfidzan,
+} = require("./lib/hafalan");
+const { handleRekapUjianCommand } = require("./lib/rekapUjian");
+const { handleQuranCommand } = require("./handlers/quranHandler");
+
+// 🔧 Handler PDF (image → PDF, gabung PDF, dsb)
+const {
+  handleImageToPDFCommand,
+  handleImageToPDF,
+  hasActivePdfSession,
+  getSessionKey: getPdfSessionKey,
+} = require("./handlers/imageToPdfHandler");
+const {
+  handlePdfMerge,
+  handlePdfMergeCommand,
+  handleCancelCommand,
+  hasActivePdfMergeSession
+} = require('./handlers/pdfMergeHandler');
+
+const {
+  handlePdfExtractCommand,
+  hasActiveExtractSession
+} = require('./handlers/pdfExtractHandler');
+const islamModeSessions = new Map();
+
+// Normalize JID / LID ke bentuk "bare" biar gampang dibandingkan
+function normalizeLid(jid) {
+  if (!jid) return "";
+  const noDevice = jid.split(":")[0];
+  return noDevice.replace("@lid", "").replace("@s.whatsapp.net", "");
+}
+
+/**
+ * Handler utama dipanggil dari src/message.js
+ *
+ * @param {import("baileys").WASocket} sock
+ * @param {object} m   pesan yang sudah di-serialize
+ * @param {object} msg raw WAMessage
+ * @param {object} store
+ * @param {object} aiService
+ */
+module.exports = async function (sock, m, msg, store, aiService) {
+  try {
+    const text = (m.text || "").trim();
+    const lcText = text.toLowerCase();
+    const isGroup = m.isGroup;
+    const isCommand = /^[.!/#]/.test(lcText);
+    const sessionKey = `${m.chat}:${m.sender}`;
+
+    // ==============================
+    // 0. MODE ISLAM (SESSION GROUP)
+    // ==============================
+    let inIslamMode = false;
+    if (isGroup && islamModeSessions.has(sessionKey)) {
+      const session = islamModeSessions.get(sessionKey);
+      const now = Date.now();
+      // Auto-expire setelah 5 menit tidak ada aktivitas
+      if (now - session.lastActivity > 5 * 60 * 1000) {
+        islamModeSessions.delete(sessionKey);
+      } else {
+        inIslamMode = true;
+      }
+    }
+
+    // Keluar dari mode Islam
+    if (inIslamMode && lcText === "aibatal") {
+      islamModeSessions.delete(sessionKey);
+      await sock.sendMessage(m.chat, {
+        text:
+          "✅ Mode *Tanya Islam Bebas* telah dihentikan.\n" +
+          "Sekarang Anda bisa menggunakan menu yang lain.",
+      });
+      return;
+    }
+
+    // Jika masih dalam mode & user kirim command (.menu, !audio, dll) atau "menu"
+    if (inIslamMode && (isCommand || lcText === "menu")) {
+      await sock.sendMessage(m.chat, {
+        text:
+          "⚠️ Anda masih dalam *mode bertanya tentang Islam*.\n" +
+          "Jika ingin menggunakan menu lain, ketik: *Aibatal* terlebih dahulu.",
+      });
+      return;
+    }
+
+    // ==============================
+    // 1. PERINTAH MENU (menu / .menu)
+    // ==============================
+    if (lcText === "menu" || lcText === ".menu") {
+      await handleMenu(sock, m);
+      return;
+    }
+
+    // =========================================================
+    // 2. HANDLE PILIHAN LIST (native_flow → interactiveResponse)
+    // =========================================================
+    if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage) {
+      try {
+        const res =
+          msg.message.interactiveResponseMessage.nativeFlowResponseMessage;
+        const data = JSON.parse(res.paramsJson || "{}");
+        const selectedId = data.id || data.row_id || data.selectedRowId;
+
+        console.log("Interactive selected:", data);
+
+        // 1) Jika user pilih "🏫 Fitur PPTQ AL-ITQON"
+        if (selectedId === "pptq_menu" || selectedId === "menu_pptq") {
+          await sendButtonMsg(sock, m.chat, {
+            text:
+              "📂 Anda memilih: *Fitur PPTQ AL-ITQON*\n\n" +
+              "Silakan pilih salah satu menu di bawah ini:",
+            footer: "PPTQ AL-ITQON",
+            mentions: [m.sender],
+            buttons: [
+              {
+                buttonId: "pptq_struktur",
+                buttonText: { displayText: "🏫 Struktur Organisasi" },
+                type: 1,
+              },
+              {
+                buttonId: "pptq_visimisi",
+                buttonText: { displayText: "🎯 Visi & Misi" },
+                type: 1,
+              },
+              {
+                buttonId: "pptq_profil",
+                buttonText: { displayText: "📘 Profil PPTQ AL-ITQON" },
+                type: 1,
+              },
+            ],
+            headerType: 1,
+          });
+          return;
+        }
+
+        // 2) Jika user pilih "📖 Fitur Ketahfidzan"
+        if (selectedId === "ketahfidzan_menu" || selectedId === "menu_hafalan") {
+          await sendButtonMsg(sock, m.chat, {
+            text:
+              "📂 Anda memilih: *Fitur Ketahfidzan*\n\n" +
+              "Silakan pilih salah satu menu di bawah ini:",
+            footer: "PPTQ AL-ITQON",
+            mentions: [m.sender],
+            buttons: [
+              {
+                buttonId: "hafalan_lihat",
+                buttonText: { displayText: "📖 Lihat Hafalan Santri" },
+                type: 1,
+              },
+              {
+                buttonId: "hafalan_daftar_ujian",
+                buttonText: {
+                  displayText: "📝 Daftar Santri Selesai Ujian",
+                },
+                type: 1,
+              },
+              {
+                buttonId: "hafalan_program",
+                buttonText: { displayText: "📚 Program Ketahfidzan" },
+                type: 1,
+              },
+            ],
+            headerType: 1,
+          });
+          return;
+        }
+
+        // 3) List halaqah dari Sheets
+        if (selectedId && selectedId.startsWith("hafalan_halaqah:")) {
+          const kode = selectedId.split(":")[1];
+          await handleHafalanSelection(sock, m, kode);
+          return;
+        }
+
+        // 4) Fitur Keislaman
+        if (selectedId === "tanya_menu_info" || selectedId === "menu_islam") {
+          await sendButtonMsg(sock, m.chat, {
+            text:
+              "🕌 Anda memilih: *Fitur Keislaman*\n\n" +
+              "Silahkan pilih aksi di bawah ini:\n" +
+              "- Tanya Islam Bebas\n" +
+              "- Download Murottal\n\n" +
+              "Klik salah satu tombol di bawah ini 👇",
+            footer: "PPTQ AL-ITQON",
+            mentions: [m.sender],
+            buttons: [
+              {
+                buttonId: "tanya_islam",
+                buttonText: { displayText: "🧕 Tanya Islam Bebas" },
+                type: 1,
+              },
+              {
+                buttonId: "download_murottal",
+                buttonText: { displayText: "🎧 Download Murottal" },
+                type: 1,
+              },
+            ],
+            headerType: 1,
+          });
+          return;
+        }
+
+        // 5) Fitur Bermanfaat / Tools
+        if (selectedId === "tools_menu_info" || selectedId === "menu_tools") {
+          await sock.sendMessage(m.chat, {
+            text:
+              "*⚙️ FITUR BERMANFAAT (TOOLS)*\n\n" +
+              "*📄 Fitur PDF*\n" +
+              "📌 *Ubah Gambar ke PDF*\n" +
+              "   - Kirimkan saya *gambar* di chat pribadi.\n" +
+              "   - Jika di *grup*, kirim gambar + *tag saya*.\n\n" +
+              "📌 *Gabung beberapa PDF jadi 1*\n" +
+              "   - Kirimkan saya *berkas PDF*.\n" +
+              "   - Jika di grup, kirim PDF + *tag saya*.\n\n" +
+              "📌 *Ambil halaman tertentu dari PDF*\n" +
+              "   - Kirim berkas PDF + instruksi halaman.\n\n" +
+              "*🌀 Fitur Convert (segera in syaa Allah)*\n" +
+              "Misalnya convert teks, format file, dll.\n\n" +
+              "_Silakan mulai dengan mengirim gambar atau PDF sesuai kebutuhan._",
+          });
+          return;
+        }
+      } catch (e) {
+        console.error("Error interactiveResponseMessage PPTQ/Hafalan:", e);
+      }
+    }
+
+    // =====================================================
+    // 3. HANDLE KLIK TOMBOL QUICK REPLY (buttonsResponse)
+    // =====================================================
+    if (msg.message?.buttonsResponseMessage) {
+      const btn = msg.message.buttonsResponseMessage;
+      const btnId = btn.selectedButtonId || btn.selectedDisplayText;
+
+      console.log("Button clicked:", btnId);
+
+      // Tombol khusus: SEMUA MENU
+      if (btnId === "all_menu") {
+        return handleAllMenu(sock, m);
+      }
+
+      // Sub-menu PPTQ
+      if (btnId === "pptq_struktur") {
+        return sendStruktur(sock, m);
+      }
+      if (btnId === "pptq_visimisi") {
+        return sendVisiMisi(sock, m);
+      }
+      if (btnId === "pptq_profil") {
+        return sendProfil(sock, m);
+      }
+
+      // Sub-menu Ketahfidzan
+      if (btnId === "hafalan_lihat") {
+        return startHafalanFlow(sock, m.chat);
+      }
+      if (btnId === "hafalan_daftar_ujian") {
+        return handleRekapUjianCommand(sock, m.chat, "3");
+      }
+      if (btnId === "hafalan_program") {
+        return sendProgramKetahfidzan(sock, m.chat);
+      }
+
+      // Sub-menu Menu Islam
+      if (btnId === "tanya_islam") {
+        if (m.isGroup) {
+          const key = `${m.chat}:${m.sender}`;
+          islamModeSessions.set(key, {
+            startedAt: Date.now(),
+            lastActivity: Date.now(),
+          });
+        }
+
+        await sock.sendMessage(m.chat, {
+          text:
+            "🧕 *Tanya Islam Bebas*\n\n" +
+            "Silahkan tanya apa saja seputar Islam, Al-Qur'an, Hadis, Fiqih, sejarah, dll.\n\n" +
+            "Contoh:\n" +
+            "- Apa itu Islam?\n" +
+            "- Hadis ke-5 Riyadhus Shalihin apa isinya?\n" +
+            "- Jelaskan makna ihsan menurut hadis Jibril.\n\n" +
+            "➜ Di *grup*, selama mode ini aktif, setiap pesan Anda akan dianggap sebagai pertanyaan (tanpa perlu mention).\n" +
+            "➜ Jika ingin berhenti dari mode ini, ketik: *Aibatal*.\n",
+        });
+        return;
+      }
+
+      if (btnId === "download_murottal") {
+        await sock.sendMessage(m.chat, {
+          text:
+            "🎧 *Download Murottal*\n\n" +
+            "Format perintah yang bisa digunakan:\n\n" +
+            "- `!audio 114`  → Surah An-Naas\n" +
+            "- `!audio 1`    → Surah Al-Fatihah\n\n" +
+            "Silahkan kirim perintah dengan format di atas.\n" +
+            "In syaa Allah nanti kita kembangkan lagi agar bisa pilih qari dan mode lainnya.",
+        });
+        return;
+      }
+    }
+
+    // =====================================================
+    // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1,2,3)
+    // =====================================================
+    if (["1", "2", "3"].includes(lcText)) {
+      if (lcText === "1") {
+        return sendStruktur(sock, m);
+      }
+      if (lcText === "2") {
+        return startHafalanFlow(sock, m.chat);
+      }
+      if (lcText === "3") {
+        return handleRekapUjianCommand(sock, m.chat, "3");
+      }
+    }
+    const conv = await handleConverter(sock, m);
+    if (conv) return;
+    // =============================
+    // 5. MUROTTAL (!audio ...)
+    // =============================
+    if (/^!audio\b/i.test(lcText)) {
+      const handled = await handleQuranCommand(sock, m.chat, text);
+      if (handled) return;
+    }
+    // =============================
+// 6. PDF: IMAGE → PDF
+// =============================
+if (msg.message?.imageMessage) {
+  const isGroup = m.isGroup;
+  const hasPdfSession = hasActivePdfSession(m.chat, m.sender);
+  let allowProcess = true;
+
+  if (isGroup && !hasPdfSession) {
+    // --- Grup, tapi BELUM ada sesi aktif: wajib mention / reply ---
+    allowProcess = false;
+
+    const raw = msg.message || {};
+    const botJid = sock.user?.id || "";
+    const botLid = sock.user?.lid || "";
+    const botBare = normalizeLid(botJid);
+    const botLidBare = normalizeLid(botLid);
+
+    const ctx =
+      raw.imageMessage?.contextInfo ||
+      raw.extendedTextMessage?.contextInfo ||
+      raw.documentMessage?.contextInfo ||
+      null;
+
+    const mentionedJid = ctx?.mentionedJid || [];
+    const mentionedBare = mentionedJid.map(normalizeLid);
+
+    const mentionedMe =
+      mentionedJid.includes(botJid) ||
+      mentionedJid.includes(botLid) ||
+      mentionedBare.includes(botBare) ||
+      mentionedBare.includes(botLidBare);
+
+    let replyToMe = false;
+    if (ctx?.quotedMessage) {
+      const qp = ctx.participant || "";
+      const qpBare = normalizeLid(qp);
+      if (
+        qp === botJid ||
+        qp === botLid ||
+        qpBare === botBare ||
+        qpBare === botLidBare
+      ) {
+        replyToMe = true;
+      }
+    }
+
+    if (mentionedMe || replyToMe) {
+      allowProcess = true;
+    }
+  }
+
+  if (allowProcess) {
+    console.log("[PDF IMG] diproses sebagai Image→PDF");
+
+    const handledImgPdf = await handleImageToPDF(
+      sock,
+      m.chat,        // jid
+      msg.message,   // hanya bagian message (imageMessage)
+      m.text || "",
+      m.sender       // userId
+    );
+    if (handledImgPdf) return;
+  }
+}
+
+// =============================
+// 6b. Follow-up Image→PDF (Y / L)
+// =============================
+if (hasActivePdfSession(m.chat, m.sender)) {
+  const handledPdfCmd = await handleImageToPDFCommand(
+    sock,
+    m.chat,        // jid
+    msg.message,   // raw message
+    m.text || "",
+    m.sender
+  );
+  if (handledPdfCmd) return;
+}
+
+// =============================
+// 7. PDF: MERGE / EXTRACT
+// =============================
+if (msg.message?.documentMessage?.mimetype?.includes("application/pdf")) {
+  const isGroup = m.isGroup;
+  const hasMergeSession = hasActivePdfMergeSession(m.chat, m.sender);
+  const hasExtractSession = hasActiveExtractSession(m.chat, m.sender);
+  let allowProcess = true;
+
+  if (isGroup && !hasMergeSession && !hasExtractSession) {
+    // --- Grup, BELUM ada sesi merge/extract: wajib mention / reply ---
+    allowProcess = false;
+
+    const raw = msg.message || {};
+    const botJid = sock.user?.id || "";
+    const botLid = sock.user?.lid || "";
+    const botBare = normalizeLid(botJid);
+    const botLidBare = normalizeLid(botLid);
+
+    const ctx =
+      raw.documentMessage?.contextInfo ||
+      raw.extendedTextMessage?.contextInfo ||
+      raw.imageMessage?.contextInfo ||
+      null;
+
+    const mentionedJid = ctx?.mentionedJid || [];
+    const mentionedBare = mentionedJid.map(normalizeLid);
+
+    const mentionedMe =
+      mentionedJid.includes(botJid) ||
+      mentionedJid.includes(botLid) ||
+      mentionedBare.includes(botBare) ||
+      mentionedBare.includes(botLidBare);
+
+    let replyToMe = false;
+    if (ctx?.quotedMessage) {
+      const qp = ctx.participant || "";
+      const qpBare = normalizeLid(qp);
+      if (
+        qp === botJid ||
+        qp === botLid ||
+        qpBare === botBare ||
+        qpBare === botLidBare
+      ) {
+        replyToMe = true;
+      }
+    }
+
+    if (mentionedMe || replyToMe) {
+      allowProcess = true;
+    }
+  }
+
+  if (allowProcess) {
+    console.log("[PDF DOC] diproses sebagai Merge/Extract");
+
+    // --- 7A. Handler MERGE ---
+    const handledMerge = await handlePdfMerge(
+      sock,
+      m.chat,
+      msg.message,   // documentMessage
+      "",
+      m.sender
+    );
+    if (handledMerge) return;
+
+    // --- 7A2. Handler EXTRACT ---
+    const handledExtract = await handlePdfExtract(
+      sock,
+      m.chat,
+      msg.message,
+      "",
+      m.sender
+    );
+    if (handledExtract) return;
+  }
+}
+
+// --- 7B. Follow-up MERGE (G / Ex / L / C / dst)
+if (hasActivePdfMergeSession(m.chat, m.sender)) {
+  const handledMergeCmd = await handlePdfMergeCommand(
+    sock,
+    m.chat,
+    msg.message,
+    m.text || "",
+    m.sender
+  );
+  if (handledMergeCmd) return;
+}
+
+// --- 7C. Follow-up EXTRACT halaman (1-5 / 1,3,7 / all)
+if (hasActiveExtractSession(m.chat, m.sender)) {
+  const handledExtractCmd = await handlePdfExtractCommand(
+    sock,
+    m.chat,
+    msg.message,
+    m.text || "",
+    m.sender
+  );
+  if (handledExtractCmd) return;
+}
+
+// --- 7D. Perintah BATAL (batal / cancel)
+const handledCancel = await handleCancelCommand(
+  sock,
+  m.chat,
+  m.text || "",
+  m.sender
+);
+if (handledCancel) return;
+    // =============================
+    // 7. AI (TANYA ISLAM / UMUM)
+    // =============================
+    if (aiService) {
+      const textNow = (m.text || lcText || "").trim();
+      if (!textNow) return;
+      //jika sesi pdf
+      if (hasActivePdfSession(m.chat, m.sender)) {
+        return;
+      }
+      // Cek lagi sesi (hanya grup)
+      let stillInIslamMode = false;
+      if (isGroup && islamModeSessions.has(sessionKey)) {
+        const session = islamModeSessions.get(sessionKey);
+        const now = Date.now();
+        if (now - session.lastActivity <= 5 * 60 * 1000) {
+          stillInIslamMode = true;
+          session.lastActivity = now;
+          islamModeSessions.set(sessionKey, session);
+        } else {
+          islamModeSessions.delete(sessionKey);
+        }
+      }
+
+      // Kalau ini command (. ! / #), AI tidak ikut campur
+      if (/^[.!/#]/.test(textNow)) {
+        return;
+      }
+
+      // 🟢 PRIVATE CHAT → selalu boleh ke AI
+      if (!isGroup) {
+        const handledByAI = await handleAIQuery(
+          sock,
+          m.chat,
+          lcText,
+          textNow,
+          aiService,
+          m
+        );
+        if (handledByAI) return;
+      } else {
+        const raw = msg.message || {};
+
+        const botJid = sock.user?.id || "";
+        const botLid = sock.user?.lid || "";
+        const botBare = normalizeLid(botJid);
+        const botLidBare = normalizeLid(botLid);
+
+        const getMentionedJids = (rawMsg) => {
+          const extMentions =
+            rawMsg.extendedTextMessage?.contextInfo?.mentionedJid || [];
+          const imgMentions =
+            rawMsg.imageMessage?.contextInfo?.mentionedJid || [];
+          const docMentions =
+            rawMsg.documentMessage?.contextInfo?.mentionedJid || [];
+          const vidMentions =
+            rawMsg.videoMessage?.contextInfo?.mentionedJid || [];
+          return [
+            ...new Set([
+              ...extMentions,
+              ...imgMentions,
+              ...docMentions,
+              ...vidMentions,
+            ]),
+          ];
+        };
+
+        const mentioned = getMentionedJids(raw);
+        const mentionedBare = mentioned.map(normalizeLid);
+
+        const isMentioned =
+          mentioned.includes(botJid) ||
+          mentioned.includes(botLid) ||
+          mentionedBare.includes(botBare) ||
+          mentionedBare.includes(botLidBare);
+
+        const ctxInfo =
+          raw.extendedTextMessage?.contextInfo ||
+          raw.imageMessage?.contextInfo ||
+          raw.documentMessage?.contextInfo ||
+          raw.videoMessage?.contextInfo ||
+          null;
+
+        let isReplyToBot = false;
+        if (ctxInfo?.quotedMessage) {
+          const qp = ctxInfo.participant || "";
+          const qpBare = normalizeLid(qp);
+          if (
+            qp === botJid ||
+            qp === botLid ||
+            qpBare === botBare ||
+            qpBare === botLidBare
+          ) {
+            isReplyToBot = true;
+          }
+        }
+
+        // Kalau belum mode Islam tapi user mention/reply → anggap mulai mode
+        if (isGroup && !stillInIslamMode && (isMentioned || isReplyToBot)) {
+          const now = Date.now();
+          islamModeSessions.set(sessionKey, {
+            startedAt: now,
+            lastActivity: now,
+          });
+          stillInIslamMode = true;
+        }
+
+        if (stillInIslamMode || isMentioned || isReplyToBot) {
+          const handledByAI = await handleAIQuery(
+            sock,
+            m.chat,
+            lcText,
+            textNow,
+            aiService,
+            m
+          );
+          if (handledByAI) return;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("❌ Error di naze.js PPTQ:", err);
+  }
+};
