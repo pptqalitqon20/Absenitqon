@@ -14,7 +14,6 @@ const {
 } = require("./lib/hafalan");
 const { handleRekapUjianCommand } = require("./lib/rekapUjian");
 const { handleQuranCommand } = require("./handlers/quranHandler");
-
 // 🔧 Handler PDF (image → PDF, gabung PDF, dsb)
 const {
   handleImageToPDFCommand,
@@ -71,6 +70,9 @@ module.exports = async function (sock, m, msg, store, aiService) {
         islamModeSessions.delete(sessionKey);
       } else {
         inIslamMode = true;
+        // Update waktu aktivitas terakhir jika inIslamMode = true
+        session.lastActivity = now;
+        islamModeSessions.set(sessionKey, session);
       }
     }
 
@@ -94,6 +96,24 @@ module.exports = async function (sock, m, msg, store, aiService) {
       });
       return;
     }
+    
+    // Jika masih dalam mode, kirim ke AI dan selesai
+    if (inIslamMode) {
+      // Pastikan ada teks untuk dikirim ke AI
+      if (aiService && (m.text || "").trim()) {
+         const handledByAI = await handleAIQuery(
+            sock,
+            m.chat,
+            lcText,
+            m.text,
+            aiService,
+            m
+          );
+          if (handledByAI) return;
+      }
+      return;
+    }
+
 
     // ==============================
     // 1. PERINTAH MENU (menu / .menu)
@@ -304,13 +324,12 @@ module.exports = async function (sock, m, msg, store, aiService) {
             "Format perintah yang bisa digunakan:\n\n" +
             "- `!audio 114`  → Surah An-Naas\n" +
             "- `!audio 1`    → Surah Al-Fatihah\n\n" +
-            "Silahkan kirim perintah dengan format di atas.\n" +
-            "In syaa Allah nanti kita kembangkan lagi agar bisa pilih qari dan mode lainnya.",
+            "*(Fitur Download Video/Audio YouTube dinonaktifkan sementara karena kendala jaringan/server).* \n" +
+            "Silahkan kirim perintah murottal di atas."
         });
         return;
+       }
       }
-    }
-
     // =====================================================
     // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1,2,3)
     // =====================================================
@@ -525,7 +544,7 @@ const handledCancel = await handleCancelCommand(
 );
 if (handledCancel) return;
     // =============================
-    // 7. AI (TANYA ISLAM / UMUM)
+    // 8. AI (TANYA ISLAM / UMUM)
     // =============================
     if (aiService) {
       const textNow = (m.text || lcText || "").trim();
@@ -534,19 +553,10 @@ if (handledCancel) return;
       if (hasActivePdfSession(m.chat, m.sender)) {
         return;
       }
-      // Cek lagi sesi (hanya grup)
-      let stillInIslamMode = false;
-      if (isGroup && islamModeSessions.has(sessionKey)) {
-        const session = islamModeSessions.get(sessionKey);
-        const now = Date.now();
-        if (now - session.lastActivity <= 5 * 60 * 1000) {
-          stillInIslamMode = true;
-          session.lastActivity = now;
-          islamModeSessions.set(sessionKey, session);
-        } else {
-          islamModeSessions.delete(sessionKey);
-        }
-      }
+      
+      // Catatan: stillInIslamMode sudah dihitung di Bagian 0.
+      // Jika stillInIslamMode == true, maka kode sudah di-return di Bagian 0.
+      // Jadi, yang sampai ke sini HANYA pesan yang BUKAN dalam mode sesi.
 
       // Kalau ini command (. ! / #), AI tidak ikut campur
       if (/^[.!/#]/.test(textNow)) {
@@ -565,6 +575,7 @@ if (handledCancel) return;
         );
         if (handledByAI) return;
       } else {
+        // 🟡 GROUP CHAT → HANYA TANGGAPI MENTION/REPLY
         const raw = msg.message || {};
 
         const botJid = sock.user?.id || "";
@@ -621,17 +632,10 @@ if (handledCancel) return;
           }
         }
 
-        // Kalau belum mode Islam tapi user mention/reply → anggap mulai mode
-        if (isGroup && !stillInIslamMode && (isMentioned || isReplyToBot)) {
-          const now = Date.now();
-          islamModeSessions.set(sessionKey, {
-            startedAt: now,
-            lastActivity: now,
-          });
-          stillInIslamMode = true;
-        }
-
-        if (stillInIslamMode || isMentioned || isReplyToBot) {
+        // *** PERUBAHAN KRUSIAL ADA DI SINI ***
+        // Kita HAPUS logika "aktifkan mode sesi otomatis" di sini.
+        // Hanya proses AI jika ada mention/reply.
+        if (isMentioned || isReplyToBot) {
           const handledByAI = await handleAIQuery(
             sock,
             m.chat,
