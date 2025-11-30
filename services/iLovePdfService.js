@@ -1,5 +1,6 @@
 // services/iLovePdfService.js
 const fs = require('fs');
+const AdmZip = require('adm-zip'); // Butuh install package ini
 const ILovePDFApi = require('@ilovepdf/ilovepdf-nodejs');
 const ILovePDFFile = require('@ilovepdf/ilovepdf-nodejs/ILovePDFFile');
 const path = require('path');
@@ -24,6 +25,8 @@ async function convertPdfToJpg(pdfPath) {
 
   let task;
   try {
+    console.log('🔄 [DEBUG] Starting PDF to JPG conversion...');
+    
     // 1. Buat tugas PDF to JPG
     task = instance.newTask('pdfjpg');
     await task.start();
@@ -35,14 +38,34 @@ async function convertPdfToJpg(pdfPath) {
     // 3. Proses tugas
     await task.process();
 
-    // 4. Unduh hasilnya
-    const data = await task.download();
+    // 4. Unduh hasilnya (ini dapat ZIP file)
+    const zipBuffer = await task.download();
+    console.log('📦 [DEBUG] Downloaded ZIP file, size:', zipBuffer.length);
 
-    return data; // Buffer gambar
+    // 5. Extract JPEG dari ZIP
+    const zip = new AdmZip(zipBuffer);
+    const zipEntries = zip.getEntries();
+    console.log('📁 [DEBUG] ZIP entries:', zipEntries.length);
+
+    // Cari file JPEG pertama
+    const jpgEntry = zipEntries.find(entry => 
+      entry.entryName.toLowerCase().endsWith('.jpg') || 
+      entry.entryName.toLowerCase().endsWith('.jpeg')
+    );
+
+    if (!jpgEntry) {
+      throw new Error('Tidak ada file JPEG dalam hasil konversi');
+    }
+
+    console.log('🖼️ [DEBUG] Found JPEG:', jpgEntry.entryName);
+    const jpgBuffer = jpgEntry.getData();
+    console.log('📸 [DEBUG] JPEG buffer size:', jpgBuffer.length);
+
+    return jpgBuffer; // Return JPEG buffer, bukan ZIP
+
   } catch (e) {
     console.error('❌ iLovePDF Konversi Gagal:', e.message || e);
     throw new Error('Gagal mengkonversi PDF ke Gambar dengan iLovePDF.');
   }
 }
-
 module.exports = { convertPdfToJpg };
