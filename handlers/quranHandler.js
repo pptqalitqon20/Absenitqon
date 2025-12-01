@@ -1,261 +1,394 @@
 // handlers/quranHandler.js
-// Versi khusus PPTQ: HANYA MUROTTAL (!audio)
+// Murottal dari API EQuran.id (tanpa simpan file lokal)
+//
+// Cara pakai di chat WhatsApp:
+//   !audio 1        -> putar full surat Al-Fatihah
+//   !audio 97       -> putar full surat Al-Qadr
+//   !audio 97 3     -> ayat 3 dari surat 97 (Al-Qadr)
+//   !audio 97:3     -> sama: ayat 3 dari surat 97
+//
+//   !qori           -> tampilkan qori aktif + daftar qori
+//   !qori 3         -> ganti ke qori kode 03 (Sudais)
+//   !qori 05        -> ganti ke qori kode 05 (Misyari Afasi)
+//
+// Catatan:
+// - Audio full surat diambil dari endpoint: GET https://equran.id/api/v2/surat
+// - Audio per ayat diambil dari endpoint: GET https://equran.id/api/v2/surat/{nomor}
+// - Konfigurasi qori hanya disimpan di memory (kalau server restart, balik ke default)
 
 const axios = require('axios');
-// Masih pakai startTyping / stopTyping / deleteLastPrompt dari fitur PDF,
-// supaya tampilan "menyiapkan audio..." bisa rapi.
-const { startTyping, stopTyping, deleteLastPrompt } = require('./pdfMergeHandler');
 
-/**
- * Normalisasi URL Google Drive:
- * - https://drive.google.com/file/d/FILE_ID/view?...
- *   -> https://docs.google.com/uc?export=download&id=FILE_ID
- * - Kalau sudah docs.google.com/uc, dibiarkan saja.
- */
-function normalizeDriveUrl(url) {
-  if (!url) return url;
-  if (url.includes('docs.google.com/uc')) return url;
+const EQURAN_BASE = 'https://equran.id/api/v2';
 
-  const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (!m) return url;
-
-  const fileId = m[1];
-  return `https://docs.google.com/uc?export=download&id=${fileId}`;
-}
-
-/**
- * Mapping nomor surah -> lokasi audio di Google Drive
- *
- * Cukup isi driveUrl dengan LINK PENUH Google Drive (format /file/d/.../view),
- * nanti akan otomatis di-convert menjadi link download langsung.
- *
- * format:
- *  - "opus"  -> dikirim sebagai voice note (ptt)
- *  - "mp3"   -> dikirim sebagai audio biasa
- */
-const CHAPTER_AUDIO = {
-  1: {
-    // Contoh: Surah 1 (Al-Fatihah)
-    driveUrl: 'https://drive.google.com/file/d/1evyVHroG9u-GRN2A0CwjQMjhAGqM-SJi/view?usp=drivesdk',
-    format: 'opus', // karena file-mu memang .opus
-  },
-  109: {
-    driveUrl: 'https://drive.google.com/file/d/18YIlWci-zan7CfZ9hEW2kfZo4im4pOfF/view?usp=drivesdk',
-    format: 'opus',
-   },
-  110: {
-    driveUrl: 'https://drive.google.com/file/d/1eb7gWN-NuWcBmFDdxWVTySLQUhJeBeT2/view?usp=drivesdk',
-    format: 'opus',
-   },
+// Daftar qori berdasarkan kode di EQuran.id
+const QARI_MAP = {
+  "01": "Abdullah Al-Juhany",
+  "02": "Abdul-Muhsin Al-Qasim",
+  "03": "Abdurrahman as-Sudais",
+  "04": "Ibrahim Al-Dossari",
+  "05": "Misyari Rasyid Al-Afasi",
+  "06": "Yasser Al-Dosari",
 };
 
-/**
- * handleQuranCommand
- * Menangani perintah:
- *  - !audio 114
- *  - !audio:114
- *  - !audio 1
- *
- * @param {WASocket} sock
- * @param {string} jid
- * @param {string} text
- * @returns {Promise<boolean>} apakah command ini sudah dikonsumsi handler
- */
-async function forceDeleteMessage(sock, jid, key) {
-  if (!key) return;
+// Qori default yang sedang dipakai (bisa diubah lewat !qori)
+let CURRENT_QARI = "05"; // awal: Misyari Afasi
 
-  const delKey = {
-    remoteJid: jid,
-    id: key.id,
-    fromMe: true, // 👈 WAJIB supaya WhatsApp izinkan hapus
-  };
+// ==============================
+// CACHE DAFTAR SURAT
+// ==============================
+let SURAH_CACHE = null;
+let SURAH_CACHE_TIME = 0;
+const SURAH_CACHE_TTL = 1000 * 60 * 60 * 6; // 6 jam
 
-  try {
-    await sock.sendMessage(jid, { delete: delKey });
-  } catch (e) {
-    console.error("❌ Gagal hapus pesan:", e.message);
+async function getSurahList() {
+  const now = Date.now();
+  if (SURAH_CACHE && now - SURAH_CACHE_TIME < SURAH_CACHE_TTL) {
+    return SURAH_CACHE;
   }
+
+  const url = `${EQURAN_BASE}/surat`;
+  const resp = await axios.get(url, { timeout: 20000 });
+
+  // Response v2: { code, message, data: [...] }
+  const list = resp.data?.data;
+  if (!Array.isArray(list)) {
+    throw new Error('Struktur respons EQuran /surat tidak sesuai (data bukan array)');
+  }
+
+  SURAH_CACHE = list;
+  SURAH_CACHE_TIME = now;
+  return list;
 }
-async function handleQuranCommand(sock, jid, text) {
-  console.log('[QURAN] handler masuk.');
 
-  let typing = null;
-  let loadingMsg = null;
+async function getSurahInfoByNumber(num) {
+  const list = await getSurahList();
+  return list.find((s) => String(s.nomor) === String(num));
+}
 
-  // Normalisasi teks
-  const cleanText = (text || '').trim().toLowerCase();
+// ==============================
+// HELPER PILIH AUDIO QARI
+// ==============================
+function chooseQariAudio(audioMap, qariCode) {
+  if (!audioMap || typeof audioMap !== 'object') return null;
 
-  // Bentuk-bentuk yang kita dukung:
-  // "!audio 114", "!audio:114", "!audio 1"
-  if (!cleanText.startsWith('!audio')) {
-    return false; // bukan perintah murottal
+  // Kalau ada qari yang diminta eksplisit
+  if (qariCode && audioMap[qariCode]) {
+    return audioMap[qariCode];
   }
 
+  // Pakai qari global aktif
+  if (CURRENT_QARI && audioMap[CURRENT_QARI]) {
+    return audioMap[CURRENT_QARI];
+  }
+
+  // Fallback: ambil pertama yang ada
+  const values = Object.values(audioMap);
+  if (!values.length) return null;
+  return values[0];
+}
+
+// ==============================
+// PARSER ARGUMEN !audio
+// ==============================
+// Bentuk yang didukung:
+//   "!audio 97"        -> { surah: 97, ayat: null }
+//   "!audio 97 3"      -> { surah: 97, ayat: 3 }
+//   "!audio 97:3"      -> { surah: 97, ayat: 3 }
+//   "!audio 97-3"      -> { surah: 97, ayat: 3 }
+function parseAudioArgs(text) {
+  if (!text) return null;
+
+  const withoutCmd = text.replace(/^!audio\b/i, '').trim();
+  if (!withoutCmd) return null;
+
+  // Pola: "97:3" atau "97-3"
+  let m = withoutCmd.match(/^(\d+)\s*[:\-]\s*(\d+)$/);
+  if (m) {
+    return {
+      surah: parseInt(m[1], 10),
+      ayat: parseInt(m[2], 10),
+    };
+  }
+
+  // Pola: "97 3"
+  m = withoutCmd.match(/^(\d+)\s+(\d+)$/);
+  if (m) {
+    return {
+      surah: parseInt(m[1], 10),
+      ayat: parseInt(m[2], 10),
+    };
+  }
+
+  // Pola: "97"
+  m = withoutCmd.match(/^(\d+)$/);
+  if (m) {
+    return {
+      surah: parseInt(m[1], 10),
+      ayat: null,
+    };
+  }
+
+  return null;
+}
+
+// ==============================
+// KIRIM AUDIO FULL SURAT
+// ==============================
+async function sendFullSurahAudio(sock, jid, surahNumber, qariCode) {
   try {
-    // Ambil argumen setelah '!audio'
-    // contoh:
-    //  - "!audio 114"  -> "114"
-    //  - "!audio:114"  -> ":114"
-    //  - "!audio 1"    -> "1"
-    let rawArg = cleanText.slice('!audio'.length).trim(); // bisa kosong / "114" / ":114" / "1"
-
-    if (!rawArg) {
-      // Tidak ada nomor surah → kirim panduan singkat
+    const info = await getSurahInfoByNumber(surahNumber);
+    if (!info) {
       await sock.sendMessage(jid, {
-        text:
-          '🎧 *Download Murottal Qur\'an*\n\n' +
-          'Format yang didukung saat ini:\n' +
-          '- `!audio 1`   → Surah Al-Fatihah\n' +
-          '- `!audio 114` → Surah An-Naas (kalau sudah diisi di sistem)\n\n' +
-          '_Audio dibacakan oleh Qori default: Mishary Rasyid Al-Afasy._',
+        text: `❌ Nomor surat *${surahNumber}* tidak ditemukan di EQuran.id`,
       });
       return true;
     }
 
-    // Kalau user pakai "!audio:114", jadikan "114"
-    if (rawArg.startsWith(':')) rawArg = rawArg.slice(1).trim();
+    const audioMap = info.audioFull || info.audio;
+    const audioUrl = chooseQariAudio(audioMap, qariCode);
 
-    // Ambil token pertama saja ("114" dari "114 blabla")
-    const firstToken = rawArg.split(/\s+/)[0]; // "114"
-    const chapterStr = firstToken.split(':')[0]; // antisipasi kalau ada "114:7"
-    const chapterNumber = parseInt(chapterStr, 10);
-
-    if (isNaN(chapterNumber) || chapterNumber < 1 || chapterNumber > 114) {
+    if (!audioUrl) {
       await sock.sendMessage(jid, {
-        text: '❌ Nomor surah tidak valid. Gunakan angka 1–114. Contoh: `!audio 1` atau `!audio 114`.',
+        text: `❌ Audio full surat *${surahNumber} - ${info.namaLatin || ''}* tidak tersedia di API.`,
       });
       return true;
     }
 
-    // Cek apakah surah ini sudah di-mapping
-    const entry = CHAPTER_AUDIO[chapterNumber];
-    if (!entry || !entry.driveUrl) {
-      await sock.sendMessage(jid, {
-        text:
-          `❌ Murottal untuk Surah ke-${chapterNumber} belum tersedia di sistem.\n` +
-          'Silahkan hubungi admin untuk menambahkan audio di Google Drive.',
-      });
-      return true;
-    }
+    const qari = qariCode || CURRENT_QARI;
+    const qariName = QARI_MAP[qari] || 'Qari tidak diketahui';
 
-    const audioUrl = normalizeDriveUrl(entry.driveUrl);
-    const format = (entry.format || '').toLowerCase();
+    const caption =
+      `📖 Murottal Surat *${info.namaLatin || ''}* (No. ${info.nomor})\n` +
+      `Qari: *${qariName}* (kode ${qari}).`;
 
-    // Mulai indikator typing + pesan loading
-    typing = startTyping(sock, jid);
-    loadingMsg = await sock.sendMessage(jid, {
-      text: `⏳ Menyiapkan murottal Surah ke-${chapterNumber} (Qori default)...`,
+    await sock.sendMessage(jid, {
+      audio: { url: audioUrl },
+      mimetype: 'audio/mpeg',
+      ptt: false,
+      caption,
     });
 
-    // Deteksi mimetype & ptt (voice note)
-    let mimetype = 'audio/mpeg';
-    let ptt = false;
-
-    const urlLC = audioUrl.toLowerCase();
-
-    if (
-      format.includes('ogg') ||
-      format.includes('opus') ||
-      urlLC.endsWith('.ogg') ||
-      urlLC.endsWith('.opus')
-    ) {
-      mimetype = 'audio/ogg; codecs=opus';
-      ptt = true; // kirim sebagai voice note
-    } else if (format.includes('mp3') || urlLC.endsWith('.mp3')) {
-      mimetype = 'audio/mpeg';
-    } else if (
-      format.includes('m4a') ||
-      format.includes('aac') ||
-      format.includes('mp4') ||
-      urlLC.endsWith('.m4a') ||
-      urlLC.endsWith('.aac') ||
-      urlLC.endsWith('.mp4')
-    ) {
-      mimetype = 'audio/mp4';
-    }
-
-    try {
-      // Ambil data audio dari URL (Google Drive → docs.uc)
-      const resp = await axios.get(audioUrl, { responseType: 'arraybuffer' });
-
-      // Hapus pesan loading sebelum kirim audio
-      if (loadingMsg?.key) {
-        await forceDeleteMessage(sock, jid, loadingMsg.key);
-        loadingMsg = null;
-      }
-
-      // Kirim sebagai audio (bisa jadi voice note jika ptt = true)
-      await sock.sendMessage(jid, {
-        audio: Buffer.from(resp.data),
-        mimetype,
-        ptt,
-        caption: `✅ Murottal Surah ke-${chapterNumber}\n_Qori: Mishary Rasyid Al-Afasy_`,
-      });
-    } catch (err) {
-      console.error(
-        '❌ Gagal unduh/kirim audio:',
-        err?.response?.status,
-        err?.message
-      );
-
-      // Fallback: kirim sebagai dokumen
-      try {
-        const resp = await axios.get(audioUrl, { responseType: 'arraybuffer' });
-
-        if (loadingMsg?.key) {
-          await deleteLastPrompt(sock, jid, { lastPromptKey: loadingMsg.key });
-          loadingMsg = null;
-        }
-
-        await sock.sendMessage(jid, {
-          document: Buffer.from(resp.data),
-          mimetype,
-          fileName: `surah-${chapterNumber}.${format || 'audio'}`,
-          caption: `📎 Audio Surah ke-${chapterNumber} (dikirim sebagai dokumen)\n_Qori: Mishary Rasyid Al-Afasy_`,
-        });
-      } catch {
-        await sock.sendMessage(jid, {
-          text: '❌ Audio siap, tetapi pengiriman gagal. Coba lagi beberapa saat.',
-        });
-      }
-    }
-
     return true;
-  } catch (e) {
-    console.error('❌ KESALAHAN FATAL MUROTTAL:', e && e.stack ? e.stack : e);
-
-    let errorMessage =
-      '❌ Terjadi kesalahan pada fitur murottal. Mohon coba lagi beberapa saat.';
-    if (e?.message?.includes('tidak tersedia')) {
-      errorMessage = e.message;
-    }
-
-    await sock.sendMessage(jid, { text: errorMessage });
+  } catch (err) {
+    console.error('[QuranHandler] Error sendFullSurahAudio:', err?.message || err);
+    await sock.sendMessage(jid, {
+      text: '❌ Gagal mengambil audio full surat dari EQuran.id. Coba lagi beberapa saat.',
+    });
     return true;
-  } finally {
-    if (typing) stopTyping(sock, jid, typing);
-
-    // Kalau masih ada loadingMsg dan belum terhapus (karena error), hapus di sini
-    if (loadingMsg?.key) {
-      try {
-        await deleteLastPrompt(sock, jid, { lastPromptKey: loadingMsg.key });
-      } catch {}
-    }
   }
 }
 
-// ====== Untuk kompatibilitas dengan kode lama ======
+// ==============================
+// KIRIM AUDIO PER AYAT
+// ==============================
+// Catatan penting:
+// Struktur detail surat di v2 kira-kira: { code, message, data: { ..., ayat: [ { nomorAyat, ... , audio: { "01": "...", ... } } ] } }
+// Kalau nanti field-nya beda (misal nama property bukan "audio"), cukup perbaiki di blok audioMap di bawah.
+async function sendAyatAudio(sock, jid, surahNumber, ayatNumber, qariCode) {
+  try {
+    const url = `${EQURAN_BASE}/surat/${surahNumber}`;
+    const resp = await axios.get(url, { timeout: 20000 });
 
-async function handleQuranFollowUp(sock, jid, text) {
-  return false;
+    // Bisa jadi resp.data = { code, message, data: {...} } atau langsung { ... }
+    const root = resp.data;
+    const surahData = root.data || root;
+
+    const ayatList = surahData.ayat || surahData.ayatList;
+    if (!Array.isArray(ayatList)) {
+      console.error('[QuranHandler] Struktur detail surat tidak mengandung array ayat:', surahData);
+      await sock.sendMessage(jid, {
+        text:
+          '❌ API EQuran.id tidak mengembalikan daftar ayat seperti yang diharapkan.\n' +
+          'Silakan cek log server untuk menyesuaikan field audio per ayat.',
+      });
+      return true;
+    }
+
+    const ayatObj = ayatList.find(
+      (a) =>
+        String(a.nomorAyat || a.nomor || a.ayat) === String(ayatNumber)
+    );
+
+    if (!ayatObj) {
+      await sock.sendMessage(jid, {
+        text: `❌ Ayat ke-*${ayatNumber}* tidak ditemukan pada surat *${surahNumber}*.`,
+      });
+      return true;
+    }
+
+    // Asumsi: ayatObj.audio = { "01": "url-qari1.mp3", ... }
+    const audioMap =
+      ayatObj.audio ||
+      ayatObj.audioFull ||
+      ayatObj.audioAyat ||
+      null;
+
+    const audioUrl = chooseQariAudio(audioMap, qariCode);
+
+    if (!audioUrl) {
+      console.error('[QuranHandler] audioMap per ayat tidak ditemukan:', ayatObj);
+      await sock.sendMessage(jid, {
+        text:
+          '❌ Audio per ayat tidak ditemukan pada response API.\n' +
+          'Cek log server untuk melihat struktur field audio di dalam objek ayat.',
+      });
+      return true;
+    }
+
+    const qari = qariCode || CURRENT_QARI;
+    const qariName = QARI_MAP[qari] || 'Qari tidak diketahui';
+
+    const caption =
+      `📖 Murottal Ayat *${ayatNumber}* dari Surat *${surahData.namaLatin || ''}* (No. ${surahData.nomor || surahNumber})\n` +
+      `Qari: *${qariName}* (kode ${qari}).`;
+
+    await sock.sendMessage(jid, {
+      audio: { url: audioUrl },
+      mimetype: 'audio/mpeg',
+      ptt: false,
+      caption,
+    });
+
+    return true;
+  } catch (err) {
+    console.error('[QuranHandler] Error sendAyatAudio:', err?.message || err);
+    await sock.sendMessage(jid, {
+      text: '❌ Gagal mengambil audio ayat dari EQuran.id. Coba lagi beberapa saat.',
+    });
+    return true;
+  }
 }
 
-function isAwaitingAudioPick(jid) {
-  return false;
+// ==============================
+// HANDLER PILIH QORI: !qori ...
+// ==============================
+//
+// Cara pakai di chat:
+//   !qori            -> tampilkan qori sekarang + daftar qori
+//   !qori 3         -> ganti ke qori kode 03 (Sudais)
+//   !qori 05        -> ganti ke qori kode 05 (Misyari Afasi)
+async function handleQoriCommand(sock, jid, text) {
+  const trimmed = (text || '').trim();
+  if (!/^!qo?ri\b/i.test(trimmed)) {
+    // bukan perintah !qori / !qari
+    return false;
+  }
+
+  const parts = trimmed.split(/\s+/);
+  const arg = parts[1]; // misal "3" atau "05"
+
+  // Jika tidak ada argumen: tampilkan info saja
+  if (!arg) {
+    let list = Object.entries(QARI_MAP)
+      .map(([kode, nama]) => {
+        const mark = kode === CURRENT_QARI ? '✅' : '▫️';
+        return `${mark} *${kode}* — ${nama}`;
+      })
+      .join('\n');
+
+    await sock.sendMessage(jid, {
+      text:
+        `🎙 *Pengaturan Qori Murottal*\n\n` +
+        `Saat ini qori yang dipakai: *${QARI_MAP[CURRENT_QARI] || 'tidak diketahui'}* (kode ${CURRENT_QARI}).\n\n` +
+        `Untuk mengubah qori, kirim contoh:\n` +
+        `•  \`!qori 5\`\n` +
+        `•  \`!qori 03\`\n\n` +
+        `Daftar qori yang tersedia:\n` +
+        list,
+    });
+    return true;
+  }
+
+  // Normalisasi argumen menjadi "01".."06"
+  let kode = arg.replace(/\D/g, ''); // ambil hanya angka
+  if (!kode) {
+    await sock.sendMessage(jid, {
+      text: '⚠️ Format tidak dikenal. Contoh: `!qori 5` atau `!qori 03`.',
+    });
+    return true;
+  }
+
+  if (kode.length === 1) kode = `0${kode}`;
+
+  if (!QARI_MAP[kode]) {
+    await sock.sendMessage(jid, {
+      text:
+        `⚠️ Kode qori *${kode}* tidak tersedia.\n` +
+        `Silakan pilih salah satu dari: ${Object.keys(QARI_MAP).join(', ')}`,
+    });
+    return true;
+  }
+
+  CURRENT_QARI = kode;
+
+  await sock.sendMessage(jid, {
+    text:
+      `✅ Qori murottal diubah menjadi:\n` +
+      `*${QARI_MAP[kode]}* (kode ${kode}).\n\n` +
+      `Sekarang semua perintah *!audio* akan memakai qori ini.`,
+  });
+
+  return true;
+}
+
+// ==============================
+// HANDLER UTAMA: !audio ...
+// ==============================
+async function handleQuranCommand(sock, jid, text /*, m */) {
+  const parsed = parseAudioArgs(text);
+  if (!parsed) {
+    // Bukan format yang kita dukung, biarkan handler lain yang urus
+    return false;
+  }
+
+  const { surah, ayat } = parsed;
+
+  if (!surah || surah < 1 || surah > 114) {
+    await sock.sendMessage(jid, {
+      text: '⚠️ Format: *!audio [surat]* atau *!audio [surat] [ayat]*\nContoh: `!audio 97` atau `!audio 97 3`',
+    });
+    return true;
+  }
+
+  if (!ayat) {
+    // Full surat - pakai CURRENT_QARI
+    return await sendFullSurahAudio(sock, jid, surah, CURRENT_QARI);
+  }
+
+  // Per ayat - pakai CURRENT_QARI
+  return await sendAyatAudio(sock, jid, surah, ayat, CURRENT_QARI);
+}
+
+// ==============================
+// STUB: !saveaudio (tidak dipakai lagi)
+// ==============================
+// Di index/messageHandler antum mungkin masih panggil handleSaveAudioCommand,
+// jadi di sini kita buat versi ringan agar tidak error.
+async function handleSaveAudioCommand(sock, m) {
+  const rawText =
+    (m && m.body) ||
+    (m && m.message && (m.message.conversation || m.message.extendedTextMessage?.text)) ||
+    '';
+
+  const text = String(rawText || '').trim().toLowerCase();
+  if (!/^!saveaudio\b/.test(text)) {
+    // Bukan perintah !saveaudio, biarkan handler lain
+    return false;
+  }
+
+  const jid = m.chat || m.key?.remoteJid;
+
+  await sock.sendMessage(jid, {
+    text:
+      'ℹ️ Sekarang bot mengambil murottal langsung dari *API EQuran.id*.\n' +
+      'Perintah *!saveaudio* tidak digunakan lagi.',
+  });
+
+  return true;
 }
 
 module.exports = {
+  handleSaveAudioCommand,
   handleQuranCommand,
-  handleQuranFollowUp,
-  isAwaitingAudioPick,
+  handleQoriCommand,
 };
