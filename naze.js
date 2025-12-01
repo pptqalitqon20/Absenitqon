@@ -13,7 +13,11 @@ const {
   sendProgramKetahfidzan,
 } = require("./lib/hafalan");
 const { handleRekapUjianCommand } = require("./lib/rekapUjian");
-const { handleQuranCommand } = require("./handlers/quranHandler");
+const {
+  handleSaveAudioCommand,
+  handleQuranCommand,
+  handleQoriCommand,
+} = require('./handlers/quranHandler');
 // 🔧 Handler PDF (image → PDF, gabung PDF, dsb)
 const {
   handleImageToPDFCommand,
@@ -349,10 +353,16 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // =============================
     // 5. MUROTTAL (!audio ...)
     // =============================
+    const saved = await handleSaveAudioCommand(sock, m);
+    if (saved) return;
+
+    const qoriHandled = await handleQoriCommand(sock, m.chat, text);
+    if (qoriHandled) return;
+
     if (/^!audio\b/i.test(lcText)) {
-      const handled = await handleQuranCommand(sock, m.chat, text);
+      const handled = await handleQuranCommand(sock, m.chat, text, m);
       if (handled) return;
-    }
+}
     // =============================
 // 6. PDF: IMAGE → PDF
 // =============================
