@@ -6,6 +6,7 @@ const { sendButtonMsg } = require("./lib/sendButton");
 const { handleConverter } = require('./handlers/converterHandler');
 const { handleAIQuery } = require("./handlers/aiHandler");
 const { sendStruktur, sendVisiMisi, sendProfil } = require("./lib/pptq");
+const { handleDownloaderCommand } = require('./lib/downloader');
 const {
   startHafalanFlow,
   handleHafalanReply,
@@ -348,8 +349,8 @@ module.exports = async function (sock, m, msg, store, aiService) {
         return handleRekapUjianCommand(sock, m.chat, "3");
       }
     }
-    const conv = await handleConverter(sock, m);
-    if (conv) return;
+    const dlHandled = await handleDownloaderCommand(sock, m, text);
+    if (dlHandled) return;
     // =============================
     // 5. MUROTTAL (!audio ...)
     // =============================
