@@ -34,6 +34,7 @@ const {
 } = require('./handlers/pdfMergeHandler');
 
 const {
+  startPdfExtractFlow,
   handlePdfExtractCommand,
   hasActiveExtractSession
 } = require('./handlers/pdfExtractHandler');
@@ -335,6 +336,17 @@ module.exports = async function (sock, m, msg, store, aiService) {
         return;
        }
       }
+    // --- 7C. Follow-up EXTRACT halaman (1-5 / 1,3,7 / all)
+if (hasActiveExtractSession(m.chat, m.sender)) {
+  const handledExtractCmd = await handlePdfExtractCommand(
+    sock,
+    m.chat,
+    msg.message,
+    m.text || "",
+    m.sender
+  );
+  if (handledExtractCmd) return;
+}
     // =====================================================
     // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1,2,3)
     // =====================================================
@@ -509,16 +521,6 @@ if (msg.message?.documentMessage?.mimetype?.includes("application/pdf")) {
       m.sender
     );
     if (handledMerge) return;
-
-    // --- 7A2. Handler EXTRACT ---
-    const handledExtract = await handlePdfExtract(
-      sock,
-      m.chat,
-      msg.message,
-      "",
-      m.sender
-    );
-    if (handledExtract) return;
   }
 }
 
@@ -533,19 +535,6 @@ if (hasActivePdfMergeSession(m.chat, m.sender)) {
   );
   if (handledMergeCmd) return;
 }
-
-// --- 7C. Follow-up EXTRACT halaman (1-5 / 1,3,7 / all)
-if (hasActiveExtractSession(m.chat, m.sender)) {
-  const handledExtractCmd = await handlePdfExtractCommand(
-    sock,
-    m.chat,
-    msg.message,
-    m.text || "",
-    m.sender
-  );
-  if (handledExtractCmd) return;
-}
-
 // --- 7D. Perintah BATAL (batal / cancel)
 const handledCancel = await handleCancelCommand(
   sock,
