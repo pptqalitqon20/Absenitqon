@@ -146,7 +146,7 @@ module.exports = async function (sock, m, msg, store, aiService) {
           await sendButtonMsg(sock, m.chat, {
             text:
               "📂 Anda memilih: *Fitur PPTQ AL-ITQON*\n\n" +
-              "Silakan pilih salah satu menu di bawah ini:",
+              "Silakan pilih salah satu menu di bawah ini👇:",
             footer: "PPTQ AL-ITQON",
             mentions: [m.sender],
             buttons: [
@@ -176,7 +176,7 @@ module.exports = async function (sock, m, msg, store, aiService) {
           await sendButtonMsg(sock, m.chat, {
             text:
               "📂 Anda memilih: *Fitur Ketahfidzan*\n\n" +
-              "Silakan pilih salah satu menu di bawah ini:",
+              "Silakan pilih salah satu menu di bawah ini👇:",
             footer: "PPTQ AL-ITQON",
             mentions: [m.sender],
             buttons: [
@@ -252,9 +252,17 @@ module.exports = async function (sock, m, msg, store, aiService) {
               "   - Jika di grup, kirim PDF + *tag saya*.\n\n" +
               "📌 *Ambil halaman tertentu dari PDF*\n" +
               "   - Kirim berkas PDF + instruksi halaman.\n\n" +
-              "*🌀 Fitur Convert (segera in syaa Allah)*\n" +
-              "Misalnya convert teks, format file, dll.\n\n" +
-              "_Silakan mulai dengan mengirim gambar atau PDF sesuai kebutuhan._",
+              "*⏬ Fitur Download*\n" +
+              "📹 *Download Video Youtube, Facebook, Tiktok, Instagram, Ig Story.*\n" +
+              "   - Perintahnya: !ytmp4 <link Youtube>.\n" +
+              "   - Perintahnya: !fb <link Facebook>.\n" +
+              "   - Perintahnya: !tt <link Tiktok>.\n" +
+              "   - Perintahnya: !ig <link Instagram>.\n" +
+              "   - Perintahnya: !igstory <link igstory>.\n" +
+              "🎧 *Download Audio Youtube, Audio Tiktok,.*\n" +
+              "   - Perintahnya: !ytmp3 <link Youtube>.\n" +
+              "   - Perintahnya: !ttmp3 <link Tiktok>.\n" +
+              "_Silakan mulai dengan mengirim gambar, PDF & link sesuai kebutuhan._",
           });
           return;
         }
@@ -327,10 +335,12 @@ module.exports = async function (sock, m, msg, store, aiService) {
         await sock.sendMessage(m.chat, {
           text:
             "🎧 *Download Murottal*\n\n" +
-            "Format perintah yang bisa digunakan:\n\n" +
+            "Contoh Format perintah yang bisa digunakan👇:\n\n" +
             "- `!audio 114`  → Surah An-Naas\n" +
-            "- `!audio 1`    → Surah Al-Fatihah\n\n" +
-            "*(Fitur Download Video/Audio YouTube dinonaktifkan sementara karena kendala jaringan/server).* \n" +
+            "- `!audio 1`    → Surah Al-Fatihah\n" +
+            "- `!audio 1:7`    → Surah Al-Fatihah ayat 7\n" +
+            "- `!qori`    → Pilih Qori 7\n\n" +
+            "*(Fitur Download Video/Audio YouTube Sudah Bisa Diganakan Lagi).* \n" +
             "Silahkan kirim perintah murottal di atas."
         });
         return;
