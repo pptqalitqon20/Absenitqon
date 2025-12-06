@@ -7,6 +7,7 @@ const { handleConverter } = require('./handlers/converterHandler');
 const { handleAIQuery } = require("./handlers/aiHandler");
 const { sendStruktur, sendVisiMisi, sendProfil } = require("./lib/pptq");
 const { handleDownloaderCommand } = require('./lib/downloader');
+const { getReactionPrompt } = require("./prompt");
 const {
   startHafalanFlow,
   handleHafalanReply,
@@ -68,7 +69,32 @@ module.exports = async function (sock, m, msg, store, aiService) {
     const isGroup = m.isGroup;
     const isCommand = /^[.!/#]/.test(lcText);
     const sessionKey = `${m.chat}:${m.sender}`;
+  try {
+    const textNow = (m.text || "").trim();
+    console.log("🔁 [AUTO-REACT] Pesan diterima:", textNow);
 
+    // hanya react kalau ada teks & bukan command
+    if (textNow && !/^[.!/#]/.test(textNow)) {
+      const emoji = getReactionPrompt(textNow);
+      console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
+
+      if (emoji) {
+        await sock.sendMessage(m.chat, {
+          react: {
+            text: emoji,
+            key: m.key, // react ke pesan user
+          },
+        });
+        console.log("✅ [AUTO-REACT] React terkirim.");
+      } else {
+        console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
+      }
+    } else {
+      console.log("ℹ️ [AUTO-REACT] Dilewati (kosong atau command).");
+    }
+  } catch (e) {
+    console.warn("⚠️ [AUTO-REACT] Gagal mengirim reaksi:", e.message || e);
+                }
     // ==============================
     // 0. MODE ISLAM (SESSION GROUP)
     // ==============================
