@@ -13,6 +13,11 @@ const {
   handleHafalanSelection,
   sendProgramKetahfidzan,
 } = require("./lib/hafalan");
+const {
+  startLaporPekananFlow,
+  handleLaporPekananListSelection,
+  handleLaporPekananTextReply,
+} = require("./lib/laporPekananWa");
 const { handleRekapUjianCommand } = require("./lib/rekapUjian");
 const {
   handleSaveAudioCommand,
@@ -357,6 +362,8 @@ if (hasActiveExtractSession(m.chat, m.sender)) {
   );
   if (handledExtractCmd) return;
 }
+  const laporHandledText = await handleLaporPekananTextReply(sock, m);
+  if (laporHandledText) return;
     // =====================================================
     // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1,2,3)
     // =====================================================
@@ -386,6 +393,10 @@ if (hasActiveExtractSession(m.chat, m.sender)) {
       const handled = await handleQuranCommand(sock, m.chat, text, m);
       if (handled) return;
 }
+    if (/^!lapor\b/i.test(text || "")) {
+      await startLaporPekananFlow(sock, m.chat);
+      return;
+     }
     // =============================
 // 6. PDF: IMAGE → PDF
 // =============================
