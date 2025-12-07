@@ -198,7 +198,9 @@ module.exports = async function (sock, m, msg, store, aiService) {
         const selectedId = data.id || data.row_id || data.selectedRowId;
 
         console.log("Interactive selected:", data);
-
+        //laporan Pekanan 
+        const laporHandledList = await handleLaporPekananListSelection(sock, m, selectedId);
+        if (laporHandledList) return;
         // 1) Jika user pilih "🏫 Fitur PPTQ AL-ITQON"
         if (selectedId === "pptq_menu" || selectedId === "menu_pptq") {
           await sendButtonMsg(sock, m.chat, {
