@@ -123,7 +123,7 @@ class SheetsService {
       console.log(`✅ Sheet "${this.TAB_TITLE}" already exists`);
     }
     //A1-F1
-        const getHead = await this.sheets.spreadsheets.values.get({
+    const getHead = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,
       range: this.HEADER_RANGE,
     });
