@@ -69,32 +69,44 @@ module.exports = async function (sock, m, msg, store, aiService) {
     const isGroup = m.isGroup;
     const isCommand = /^[.!/#]/.test(lcText);
     const sessionKey = `${m.chat}:${m.sender}`;
-  try {
-    const textNow = (m.text || "").trim();
-    console.log("🔁 [AUTO-REACT] Pesan diterima:", textNow);
+    const chatId = m.chat || m.key?.remoteJid || "";
 
-    // hanya react kalau ada teks & bukan command
-    if (textNow && !/^[.!/#]/.test(textNow)) {
-      const emoji = getReactionPrompt(textNow);
-      console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
+    // ==========================
+    // AUTO REACTION SEDERHANA
+    // ==========================
+    try {
+      console.log("🔁 [AUTO-REACT] Pesan diterima:", text);
 
-      if (emoji) {
-        await sock.sendMessage(m.chat, {
-          react: {
-            text: emoji,
-            key: m.key, // react ke pesan user
-          },
-        });
-        console.log("✅ [AUTO-REACT] React terkirim.");
+      // hanya react kalau ada teks & bukan command
+      if (text && !/^[.!/#]/.test(text)) {
+        const emoji = getReactionPrompt(text);
+        console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
+
+        if (emoji) {
+          await sock.sendMessage(m.chat, {
+            react: {
+              text: emoji,
+              key: m.key, // react ke pesan user
+            },
+          });
+          console.log("✅ [AUTO-REACT] React terkirim.");
+        } else {
+          console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
+        }
       } else {
-        console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
+        console.log("ℹ️ [AUTO-REACT] Dilewati (kosong atau command).");
       }
-    } else {
-      console.log("ℹ️ [AUTO-REACT] Dilewati (kosong atau command).");
+    } catch (e) {
+      console.warn("⚠️ [AUTO-REACT] Gagal mengirim reaksi:", e.message || e);
     }
-  } catch (e) {
-    console.warn("⚠️ [AUTO-REACT] Gagal mengirim reaksi:", e.message || e);
-                }
+
+    // --- Abaikan pesan dari Newsletter / Channel ---
+    if (chatId.endsWith("@newsletter")) {
+      console.log(
+        "ℹ️ [ROUTER] Pesan dari newsletter, hanya auto-react lalu skip handler lain."
+      );
+      return;
+      }
     // ==============================
     // 0. MODE ISLAM (SESSION GROUP)
     // ==============================
