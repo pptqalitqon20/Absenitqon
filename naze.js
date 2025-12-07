@@ -70,23 +70,41 @@ module.exports = async function (sock, m, msg, store, aiService) {
     const isCommand = /^[.!/#]/.test(lcText);
     const sessionKey = `${m.chat}:${m.sender}`;
     const chatId = m.chat || m.key?.remoteJid || "";
+    const messageKey = m.key || null;
+
+    // 1️⃣ SKIP TOTAL: pesan dari newsletter/channel
+    if (chatId.endsWith("@newsletter")) {
+      console.log(
+        "ℹ️ [ROUTER] Pesan dari newsletter/channel, dilewati total (tanpa react & tanpa handler)."
+      );
+      return;
+    }
 
     // ==========================
-    // AUTO REACTION SEDERHANA
+    // 2️⃣ AUTO REACTION SEDERHANA
     // ==========================
     try {
       console.log("🔁 [AUTO-REACT] Pesan diterima:", text);
 
-      // hanya react kalau ada teks & bukan command
-      if (text && !/^[.!/#]/.test(text)) {
+      // kirim react hanya jika:
+      // - ada teks
+      // - bukan command
+      // - punya key yang valid (remoteJid & id)
+      if (
+        text &&
+        !/^[.!/#]/.test(text) &&
+        messageKey &&
+        messageKey.remoteJid &&
+        messageKey.id
+      ) {
         const emoji = getReactionPrompt(text);
         console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
 
         if (emoji) {
-          await sock.sendMessage(m.chat, {
+          await sock.sendMessage(chatId, {
             react: {
               text: emoji,
-              key: m.key, // react ke pesan user
+              key: messageKey, // gunakan key yang sudah dicek valid
             },
           });
           console.log("✅ [AUTO-REACT] React terkirim.");
@@ -94,19 +112,17 @@ module.exports = async function (sock, m, msg, store, aiService) {
           console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
         }
       } else {
-        console.log("ℹ️ [AUTO-REACT] Dilewati (kosong atau command).");
+        console.log(
+          "ℹ️ [AUTO-REACT] Dilewati (kosong/command/tidak punya key yang valid)."
+        );
       }
     } catch (e) {
-      console.warn("⚠️ [AUTO-REACT] Gagal mengirim reaksi:", e.message || e);
+      console.warn(
+        "⚠️ [AUTO-REACT] Gagal mengirim reaksi:",
+        e.message || e
+      );
     }
 
-    // --- Abaikan pesan dari Newsletter / Channel ---
-    if (chatId.endsWith("@newsletter")) {
-      console.log(
-        "ℹ️ [ROUTER] Pesan dari newsletter, hanya auto-react lalu skip handler lain."
-      );
-      return;
-      }
     // ==============================
     // 0. MODE ISLAM (SESSION GROUP)
     // ==============================
@@ -124,7 +140,6 @@ module.exports = async function (sock, m, msg, store, aiService) {
         islamModeSessions.set(sessionKey, session);
       }
     }
-
     // Keluar dari mode Islam
     if (inIslamMode && lcText === "aibatal") {
       islamModeSessions.delete(sessionKey);
