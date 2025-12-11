@@ -433,7 +433,7 @@ if (hasActiveExtractSession(m.chat, m.sender)) {
         return handleRekapUjianCommand(sock, m.chat, "3");
       }
     }
-    const dlHandled = await handleDownloaderCommand(sock, m, text);
+    const dlHandled = await handleDownloaderCommand(sock, m, text, msg);
     if (dlHandled) return;
     // =============================
     // 5. MUROTTAL (!audio ...)
