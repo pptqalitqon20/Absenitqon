@@ -6,7 +6,7 @@ function isBotCommand(text) {
   return t.startsWith('!');
 }
 
-async function handleAIQuery(sock, jid, lcText, rawText, aiService, m) {
+async function handleAIQuery(sock, jid, lcText, rawText, aiService, msg) { // Menerima 'msg'
   try {
     if (!aiService) {
       console.log('🧠 AIHandler: aiService tidak tersedia, skip.');
@@ -40,14 +40,16 @@ async function handleAIQuery(sock, jid, lcText, rawText, aiService, m) {
       return false;
     }
 
-    await sock.sendMessage(jid, { text: reply });
-    console.log('🧠 AIHandler: balasan terkirim.');
+    // >>> PERUBAHAN: Tambahkan { quoted: msg } di sini
+    await sock.sendMessage(jid, { text: reply }, { quoted: msg });
+    console.log('🧠 AIHandler: balasan terkirim (mereply).');
     return true;
   } catch (err) {
     console.error('❌ AI handler error:', err);
     // Kirim fallback minimal agar user dapat feedback
     try {
-      await sock.sendMessage(jid, { text: 'Maaf, AI sedang sibuk. Coba lagi ya. 🙏' });
+      // Pastikan fallback juga mereply
+      await sock.sendMessage(jid, { text: 'Maaf, AI sedang sibuk. Coba lagi ya. 🙏' }, { quoted: msg });
     } catch (_) {}
     return false;
   }
