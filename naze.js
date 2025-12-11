@@ -171,7 +171,7 @@ module.exports = async function (sock, m, msg, store, aiService) {
             lcText,
             m.text,
             aiService,
-            m
+            msg
           );
           if (handledByAI) return;
       }
@@ -647,7 +647,7 @@ if (handledCancel) return;
           lcText,
           textNow,
           aiService,
-          m
+          msg
         );
         if (handledByAI) return;
       } else {
@@ -718,7 +718,7 @@ if (handledCancel) return;
             lcText,
             textNow,
             aiService,
-            m
+            msg
           );
           if (handledByAI) return;
         }
