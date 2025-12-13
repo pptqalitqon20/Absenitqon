@@ -86,44 +86,74 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // 2️⃣ AUTO REACTION SEDERHANA
     // ==========================
     try {
-      console.log("🔁 [AUTO-REACT] Pesan diterima:", text);
+      console.log("=".repeat(50));
+      console.log("🔁 [AUTO-REACT-DEBUG] START");
+      console.log("📝 Pesan diterima:", text);
+      console.log("🔑 messageKey:", messageKey);
+      console.log("🔑 messageKey.remoteJid:", messageKey?.remoteJid);
+      console.log("🔑 messageKey.id:", messageKey?.id);
+      console.log("📌 chatId:", chatId);
+      console.log("📊 isCommand:", /^[.!/#]/.test(text));
+      console.log("🛠️  getReactionPrompt exists:", typeof getReactionPrompt);
+  
+  // Test fungsi getReactionPrompt
+      let emojiTest = null;
+      try {
+       emojiTest = getReactionPrompt(text);
+       console.log("🎭 getReactionPrompt result:", emojiTest);
+     } catch (funcError) {
+       console.error("❌ getReactionPrompt error:", funcError.message);
+       emojiTest = "👍"; // fallback
+     }
 
-      // kirim react hanya jika:
-      // - ada teks
-      // - bukan command
-      // - punya key yang valid (remoteJid & id)
-      if (
-        text &&
-        !/^[.!/#]/.test(text) &&
-        messageKey &&
-        messageKey.remoteJid &&
-        messageKey.id
-      ) {
-        const emoji = getReactionPrompt(text);
-        console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
+  // Cek semua kondisi
+       const hasText = text && text.trim().length > 0;
+       const notCommand = !/^[.!/#]/.test(text);
+       const hasValidKey = messageKey && messageKey.remoteJid && messageKey.id;
+  
+       console.log("✅ hasText:", hasText);
+       console.log("✅ notCommand:", notCommand);
+       console.log("✅ hasValidKey:", hasValidKey);
+  
+       const allConditionsMet = hasText && notCommand && hasValidKey;
+       console.log("🎯 ALL CONDITIONS MET:", allConditionsMet);
 
-        if (emoji) {
+  // kirim react hanya jika semua kondisi terpenuhi
+       if (allConditionsMet) {
+        const emoji = emojiTest || "👍";
+        console.log("🎭 Emoji terpilih:", emoji);
+
+        try {
+          console.log("📤 Mencoba kirim react...");
           await sock.sendMessage(chatId, {
-            react: {
-              text: emoji,
-              key: messageKey,
-            },
-          });
+           react: {
+            text: emoji,
+             key: messageKey,
+           },
+         });
           console.log("✅ [AUTO-REACT] React terkirim.");
-        } else {
-          console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
+         }catch (sendError) {
+          console.error("❌ Gagal kirim react:", sendError.message);
+          console.error("❌ Stack:", sendError.stack);
+         }
+       } else {
+         console.log("ℹ️ [AUTO-REACT] Dilewati karena:");
+         if (!hasText) console.log("   - Tidak ada teks");
+         if (!notCommand) console.log("   - Adalah command");
+         if (!hasValidKey) {
+          console.log("   - Key tidak valid:");
+          console.log("     messageKey exists:", !!messageKey);
+          console.log("     remoteJid exists:", !!messageKey?.remoteJid);
+          console.log("     id exists:", !!messageKey?.id);
         }
-      } else {
-        console.log(
-          "ℹ️ [AUTO-REACT] Dilewati (kosong/command/tidak punya key yang valid)."
-        );
-      }
-    } catch (e) {
-      console.warn(
-        "⚠️ [AUTO-REACT] Gagal mengirim reaksi:",
-        e.message || e
-      );
-    }
+       }
+  
+         console.log("🔁 [AUTO-REACT-DEBUG] END");
+         console.log("=".repeat(50));
+        }catch (e) {
+         console.error("💥 [AUTO-REACT] Error utama:", e.message);
+         console.error("💥 Stack:", e.stack);
+        }
     // ==============================
     // 0. MODE ISLAM (SESSION GROUP)
     // ==============================
