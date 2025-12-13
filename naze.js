@@ -72,12 +72,14 @@ module.exports = async function (sock, m, msg, store, aiService) {
     const chatId = m.chat || m.key?.remoteJid || "";
     const messageKey = m.key || null;
 
-    // 1️⃣ SKIP TOTAL: pesan dari newsletter/channel
-    if (chatId.endsWith("@newsletter")) {
-      console.log(
-        "ℹ️ [ROUTER] Pesan dari newsletter/channel, dilewati total (tanpa react & tanpa handler)."
-      );
-      return;
+    // ==========================
+    // 1️⃣ DETEKSI PESAN DARI CHANNEL/NEWSLETTER
+    // ==========================
+    const isNewsletter = chatId.endsWith("@newsletter");
+    
+    if (isNewsletter) {
+      console.log("📬 [NEWSLETTER] Pesan dari channel, dilewati total.");
+      return; // Hentikan eksekusi untuk newsletter
     }
 
     // ==========================
@@ -104,7 +106,7 @@ module.exports = async function (sock, m, msg, store, aiService) {
           await sock.sendMessage(chatId, {
             react: {
               text: emoji,
-              key: messageKey, // gunakan key yang sudah dicek valid
+              key: messageKey,
             },
           });
           console.log("✅ [AUTO-REACT] React terkirim.");
@@ -122,7 +124,6 @@ module.exports = async function (sock, m, msg, store, aiService) {
         e.message || e
       );
     }
-
     // ==============================
     // 0. MODE ISLAM (SESSION GROUP)
     // ==============================
