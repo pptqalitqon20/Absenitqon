@@ -68,112 +68,62 @@ module.exports = async function (sock, m, msg, store, aiService) {
     const lcText = text.toLowerCase();
     const isGroup = m.isGroup;
     const isCommand = /^[.!/#]/.test(lcText);
-    const sessionKey = ${m.chat}:${m.sender};
-    const chatId = m.chat  m.key?.remoteJid  msg?.key?.remoteJid || "";
-    
-    // DEBUG: Tampilkan struktur lengkap
-    console.log("🔍 [STRUCTURE-DEBUG]");
-    console.log("  m.key:", m.key);
-    console.log("  m.message?.key:", m.message?.key);
-    console.log("  msg.key:", msg?.key);
-    console.log("  m.id:", m.id);
-    console.log("  chatId:", chatId);
-    
+    const sessionKey = `${m.chat}:${m.sender}`;
+    const chatId = m.chat || m.key?.remoteJid || "";
+    const messageKey = m.key || null;
+
     // ==========================
     // 1️⃣ DETEKSI PESAN DARI CHANNEL/NEWSLETTER
     // ==========================
     const isNewsletter = chatId.endsWith("@newsletter");
-    
+
     if (isNewsletter) {
       console.log("📬 [NEWSLETTER] Pesan dari channel, dilewati total.");
-      return;
-      }
+      return; // Hentikan eksekusi untuk newsletter
+    }
 
     // ==========================
     // 2️⃣ AUTO REACTION SEDERHANA
     // ==========================
     try {
-     console.log("🔁 [AUTO-REACT] Pesan diterima:", text);
+      console.log("🔁 [AUTO-REACT] Pesan diterima:", text);
 
-  // ============================================
-  // CARI KEY DARI BERBAGAI SUMBER (FIX untuk Render)
-  // ============================================
-     let reactKey = null;
-  
-  // Priority 1: Dari m.key langsung
-     if (m.key && m.key.remoteJid && m.key.id) {
-       reactKey = m.key;
-       console.log("🔑 [KEY] Menggunakan m.key langsung");
-     }
-  // Priority 2: Dari m.message?.key
-     else if (m.message?.key && m.message.key.remoteJid && m.message.key.id) {
-       reactKey = m.message.key;
-       console.log("🔑 [KEY] Menggunakan m.message.key");
-     }
-  // Priority 3: Dari msg?.key (raw message)
-     else if (msg?.key && msg.key.remoteJid && msg.key.id) {
-       reactKey = msg.key;
-       console.log("🔑 [KEY] Menggunakan msg.key");
-     }
-  // Priority 4: Buat manual dari m.id
-     else if (m.id && chatId) {
-       reactKey = {
-         remoteJid: chatId,
-         id: m.id,
-         fromMe: false
-     };
-       console.log("🔑 [KEY] Membuat manual dari m.id:", m.id);
-  }
-  // Priority 5: Last resort - buat ID unik
-     else if (chatId) {
-       reactKey = {
-         remoteJid: chatId,
-         id: Date.now().toString(),
-         fromMe: false
-      };
-       console.log("🔑 [KEY] Membuat dengan ID timestamp");
-  }
+      // kirim react hanya jika:
+      // - ada teks
+      // - bukan command
+      // - punya key yang valid (remoteJid & id)
+      if (
+        text &&
+        !/^[.!/#]/.test(text) &&
+        messageKey &&
+        messageKey.remoteJid &&
+        messageKey.id
+      ) {
+        const emoji = getReactionPrompt(text);
+        console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
 
-       console.log("🔑 [KEY] Key akhir:", reactKey);
-
-  // ============================================
-  // KIRIM REACT JIKA MEMENUHI SYARAT
-  // ============================================
-  if (
-    text &&
-    !/^[.!/#]/.test(text) &&
-    reactKey &&
-    reactKey.remoteJid &&
-    reactKey.id
-  ) {
-    const emoji = getReactionPrompt(text);
-    console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
-
-    if (emoji) {
-      await sock.sendMessage(chatId, {
-        react: {
-          text: emoji,
-          key: reactKey,
-        },
-      });
-      console.log("✅ [AUTO-REACT] React terkirim.");
-    } else {
-      console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
-    }
-  } else {
-    console.log(
-      "ℹ️ [AUTO-REACT] Dilewati karena:",
-      !text ? "tidak ada teks" : 
-      /^[.!/#]/.test(text) ? "adalah command" : 
-      !reactKey ? "tidak punya key" :
-      !reactKey.remoteJid ? "key tidak punya remoteJid" :
-      !reactKey.id ? "key tidak punya id" :
-      "alasan tidak diketahui"
-    );
-  }
-} catch (e) {
-  console.warn("⚠️ [AUTO-REACT] Gagal:", e.message);
-}
+        if (emoji) {
+          await sock.sendMessage(chatId, {
+            react: {
+              text: emoji,
+              key: messageKey,
+            },
+          });
+          console.log("✅ [AUTO-REACT] React terkirim.");
+        } else {
+          console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
+        }
+      } else {
+        console.log(
+          "ℹ️ [AUTO-REACT] Dilewati (kosong/command/tidak punya key yang valid)."
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "⚠️ [AUTO-REACT] Gagal mengirim reaksi:",
+        e.message || e
+      );
+              }
     // ==============================
     // 0. MODE ISLAM (SESSION GROUP)
     // ==============================
