@@ -68,10 +68,17 @@ module.exports = async function (sock, m, msg, store, aiService) {
     const lcText = text.toLowerCase();
     const isGroup = m.isGroup;
     const isCommand = /^[.!/#]/.test(lcText);
-    const sessionKey = `${m.chat}:${m.sender}`;
-    const chatId = m.chat || m.key?.remoteJid || "";
-    const messageKey = m.key || null;
-
+    const sessionKey = ${m.chat}:${m.sender};
+    const chatId = m.chat  m.key?.remoteJid  msg?.key?.remoteJid || "";
+    
+    // DEBUG: Tampilkan struktur lengkap
+    console.log("🔍 [STRUCTURE-DEBUG]");
+    console.log("  m.key:", m.key);
+    console.log("  m.message?.key:", m.message?.key);
+    console.log("  msg.key:", msg?.key);
+    console.log("  m.id:", m.id);
+    console.log("  chatId:", chatId);
+    
     // ==========================
     // 1️⃣ DETEKSI PESAN DARI CHANNEL/NEWSLETTER
     // ==========================
@@ -79,81 +86,94 @@ module.exports = async function (sock, m, msg, store, aiService) {
     
     if (isNewsletter) {
       console.log("📬 [NEWSLETTER] Pesan dari channel, dilewati total.");
-      return; // Hentikan eksekusi untuk newsletter
-    }
+      return;
+      }
 
     // ==========================
     // 2️⃣ AUTO REACTION SEDERHANA
     // ==========================
     try {
-      console.log("=".repeat(50));
-      console.log("🔁 [AUTO-REACT-DEBUG] START");
-      console.log("📝 Pesan diterima:", text);
-      console.log("🔑 messageKey:", messageKey);
-      console.log("🔑 messageKey.remoteJid:", messageKey?.remoteJid);
-      console.log("🔑 messageKey.id:", messageKey?.id);
-      console.log("📌 chatId:", chatId);
-      console.log("📊 isCommand:", /^[.!/#]/.test(text));
-      console.log("🛠️  getReactionPrompt exists:", typeof getReactionPrompt);
+     console.log("🔁 [AUTO-REACT] Pesan diterima:", text);
+
+  // ============================================
+  // CARI KEY DARI BERBAGAI SUMBER (FIX untuk Render)
+  // ============================================
+     let reactKey = null;
   
-  // Test fungsi getReactionPrompt
-      let emojiTest = null;
-      try {
-       emojiTest = getReactionPrompt(text);
-       console.log("🎭 getReactionPrompt result:", emojiTest);
-     } catch (funcError) {
-       console.error("❌ getReactionPrompt error:", funcError.message);
-       emojiTest = "👍"; // fallback
+  // Priority 1: Dari m.key langsung
+     if (m.key && m.key.remoteJid && m.key.id) {
+       reactKey = m.key;
+       console.log("🔑 [KEY] Menggunakan m.key langsung");
      }
+  // Priority 2: Dari m.message?.key
+     else if (m.message?.key && m.message.key.remoteJid && m.message.key.id) {
+       reactKey = m.message.key;
+       console.log("🔑 [KEY] Menggunakan m.message.key");
+     }
+  // Priority 3: Dari msg?.key (raw message)
+     else if (msg?.key && msg.key.remoteJid && msg.key.id) {
+       reactKey = msg.key;
+       console.log("🔑 [KEY] Menggunakan msg.key");
+     }
+  // Priority 4: Buat manual dari m.id
+     else if (m.id && chatId) {
+       reactKey = {
+         remoteJid: chatId,
+         id: m.id,
+         fromMe: false
+     };
+       console.log("🔑 [KEY] Membuat manual dari m.id:", m.id);
+  }
+  // Priority 5: Last resort - buat ID unik
+     else if (chatId) {
+       reactKey = {
+         remoteJid: chatId,
+         id: Date.now().toString(),
+         fromMe: false
+      };
+       console.log("🔑 [KEY] Membuat dengan ID timestamp");
+  }
 
-  // Cek semua kondisi
-       const hasText = text && text.trim().length > 0;
-       const notCommand = !/^[.!/#]/.test(text);
-       const hasValidKey = messageKey && messageKey.remoteJid && messageKey.id;
-  
-       console.log("✅ hasText:", hasText);
-       console.log("✅ notCommand:", notCommand);
-       console.log("✅ hasValidKey:", hasValidKey);
-  
-       const allConditionsMet = hasText && notCommand && hasValidKey;
-       console.log("🎯 ALL CONDITIONS MET:", allConditionsMet);
+       console.log("🔑 [KEY] Key akhir:", reactKey);
 
-  // kirim react hanya jika semua kondisi terpenuhi
-       if (allConditionsMet) {
-        const emoji = emojiTest || "👍";
-        console.log("🎭 Emoji terpilih:", emoji);
+  // ============================================
+  // KIRIM REACT JIKA MEMENUHI SYARAT
+  // ============================================
+  if (
+    text &&
+    !/^[.!/#]/.test(text) &&
+    reactKey &&
+    reactKey.remoteJid &&
+    reactKey.id
+  ) {
+    const emoji = getReactionPrompt(text);
+    console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
 
-        try {
-          console.log("📤 Mencoba kirim react...");
-          await sock.sendMessage(chatId, {
-           react: {
-            text: emoji,
-             key: messageKey,
-           },
-         });
-          console.log("✅ [AUTO-REACT] React terkirim.");
-         }catch (sendError) {
-          console.error("❌ Gagal kirim react:", sendError.message);
-          console.error("❌ Stack:", sendError.stack);
-         }
-       } else {
-         console.log("ℹ️ [AUTO-REACT] Dilewati karena:");
-         if (!hasText) console.log("   - Tidak ada teks");
-         if (!notCommand) console.log("   - Adalah command");
-         if (!hasValidKey) {
-          console.log("   - Key tidak valid:");
-          console.log("     messageKey exists:", !!messageKey);
-          console.log("     remoteJid exists:", !!messageKey?.remoteJid);
-          console.log("     id exists:", !!messageKey?.id);
-        }
-       }
-  
-         console.log("🔁 [AUTO-REACT-DEBUG] END");
-         console.log("=".repeat(50));
-        }catch (e) {
-         console.error("💥 [AUTO-REACT] Error utama:", e.message);
-         console.error("💥 Stack:", e.stack);
-        }
+    if (emoji) {
+      await sock.sendMessage(chatId, {
+        react: {
+          text: emoji,
+          key: reactKey,
+        },
+      });
+      console.log("✅ [AUTO-REACT] React terkirim.");
+    } else {
+      console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
+    }
+  } else {
+    console.log(
+      "ℹ️ [AUTO-REACT] Dilewati karena:",
+      !text ? "tidak ada teks" : 
+      /^[.!/#]/.test(text) ? "adalah command" : 
+      !reactKey ? "tidak punya key" :
+      !reactKey.remoteJid ? "key tidak punya remoteJid" :
+      !reactKey.id ? "key tidak punya id" :
+      "alasan tidak diketahui"
+    );
+  }
+} catch (e) {
+  console.warn("⚠️ [AUTO-REACT] Gagal:", e.message);
+}
     // ==============================
     // 0. MODE ISLAM (SESSION GROUP)
     // ==============================
