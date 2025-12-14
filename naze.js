@@ -87,7 +87,13 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // ==========================
     try {
       console.log("🔁 [AUTO-REACT] Pesan diterima:", text);
-
+      console.log("DEBUG REACT CHECK", {
+       text,
+       remoteJid: messageKey?.remoteJid,
+       id: messageKey?.id,
+       stanzaId: messageKey?.stanzaId,
+       fullKey: messageKey
+      });
       // kirim react hanya jika:
       // - ada teks
       // - bukan command
