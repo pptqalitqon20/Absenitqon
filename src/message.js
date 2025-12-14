@@ -46,7 +46,12 @@ async function serialize(naze, msg, store) {
   // Untuk command "quoted" (kalau nanti perlu)
   m.quoted =
     msg.message?.extendedTextMessage?.contextInfo?.quotedMessage || null;
+
   m.raw = msg;
+
+  // ✅ BARIS PENTING (FIX AUTO-REACT, DELETE, EDIT, DLL)
+  m.key = msg.key;
+
   return m;
 }
 
@@ -79,34 +84,34 @@ function pushToStore(store, msg) {
 module.exports = async function MessagesUpsert(naze, message, store, aiService) {
   try {
     const msg = message.messages[0];
-        const upsertType = message.type; // <- dari Baileys: 'notify', 'append', 'replace', dll
-        if (!msg || !msg.key) return;
+    const upsertType = message.type; // 'notify', 'append', 'replace', dll
+    if (!msg || !msg.key) return;
 
-        // ❗ Hanya proses pesan baru, hindari spam dari sync/history
-        if (upsertType !== 'notify') {
-            return;
-        }
+    // ❗ Hanya proses pesan baru
+    if (upsertType !== 'notify') {
+      return;
+    }
 
     const jid = msg.key.remoteJid;
 
-    // 1) Simpan ke store (riwayat chat)
+    // 1) Simpan ke store
     pushToStore(store, msg);
 
-    // 2) TANDAI PESAN SEBAGAI DIBACA (✅✅ / biru, kalau setting WA mengizinkan)
+    // 2) Tandai pesan dibaca
     try {
       await naze.readMessages([msg.key]);
     } catch (e) {
-      console.warn('readMessages gagal (bisa diabaikan):', e.message);
+      console.warn('readMessages gagal:', e.message);
     }
 
-    // 3) TAMPIL ONLINE / AVAILABLE DI CHAT INI
+    // 3) Online indicator
     try {
       await naze.sendPresenceUpdate('available', jid);
     } catch (e) {
       console.warn('sendPresenceUpdate available gagal:', e.message);
     }
 
-    // 4) Serialize → bentuk objek m yang rapi
+    // 4) Serialize
     const m = await serialize(naze, msg, store);
 
     // Debug log
@@ -118,21 +123,19 @@ module.exports = async function MessagesUpsert(naze, message, store, aiService) 
       name: m.pushName,
     });
 
-    // 5) KIRIM INDICATOR TYPING SEBELUM PROSES
+    // 5) Typing indicator
     try {
       await naze.sendPresenceUpdate('composing', m.chat);
     } catch (e) {
       console.warn('sendPresenceUpdate composing gagal:', e.message);
     }
 
-    // 6) MASUK KE ROUTER PPTQ (naze.js)
+    // 6) Router utama
     await pptqHandler(naze, m, msg, store, aiService);
 
-    // 7) SET KE "PAUSED" / "AVAILABLE" SETELAH SELESAI
+    // 7) Presence paused
     try {
       await naze.sendPresenceUpdate('paused', m.chat);
-      // atau kalau mau selalu keliatan aktif:
-      // await naze.sendPresenceUpdate('available', m.chat);
     } catch (e) {
       console.warn('sendPresenceUpdate paused gagal:', e.message);
     }
