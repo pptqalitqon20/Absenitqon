@@ -460,6 +460,61 @@ if (hasActiveExtractSession(m.chat, m.sender)) {
       await startLaporPekananFlow(sock, m.chat);
       return;
      }
+// =============================
+// 9. FITUR EDIT GAMBAR (BW)
+// =============================
+if (lcText === '.bw' || (msg.message?.imageMessage?.caption?.toLowerCase() === '.bw')) {
+  let allowBw = true;
+
+  // Jika di Group, cek apakah bot dimention atau direply
+  if (isGroup) {
+    allowBw = false;
+    const botJid = sock.user?.id || "";
+    const botLid = sock.user?.lid || "";
+    const botBare = normalizeLid(botJid);
+    const botLidBare = normalizeLid(botLid);
+
+    const ctx = 
+      msg.message?.imageMessage?.contextInfo || 
+      msg.message?.extendedTextMessage?.contextInfo || 
+      null;
+
+    const mentionedJid = ctx?.mentionedJid || [];
+    const mentionedBare = mentionedJid.map(normalizeLid);
+
+    // Cek apakah bot dimention
+    const mentionedMe =
+      mentionedJid.includes(botJid) ||
+      mentionedJid.includes(botLid) ||
+      mentionedBare.includes(botBare) ||
+      mentionedBare.includes(botLidBare);
+
+    // Cek apakah bot direply
+    let replyToMe = false;
+    if (ctx?.quotedMessage) {
+      const qp = ctx.participant || "";
+      const qpBare = normalizeLid(qp);
+      if (
+        qp === botJid ||
+        qp === botLid ||
+        qpBare === botBare ||
+        qpBare === botLidBare
+      ) {
+        replyToMe = true;
+      }
+    }
+
+    if (mentionedMe || replyToMe) {
+      allowBw = true;
+    }
+  }
+
+  // Eksekusi hanya jika di Privat Chat ATAU (Grup + Mention/Reply)
+  if (allowBw) {
+    const handledBw = await handleGrayscale(sock, m, msg);
+    if (handledBw) return;
+  }
+}
     // =============================
 // 6. PDF: IMAGE → PDF
 // =============================
@@ -627,61 +682,7 @@ const handledCancel = await handleCancelCommand(
   m.sender
 );
 if (handledCancel) return;
-// =============================
-// 9. FITUR EDIT GAMBAR (BW)
-// =============================
-if (lcText === '.bw' || (msg.message?.imageMessage?.caption?.toLowerCase() === '.bw')) {
-  let allowBw = true;
 
-  // Jika di Group, cek apakah bot dimention atau direply
-  if (isGroup) {
-    allowBw = false;
-    const botJid = sock.user?.id || "";
-    const botLid = sock.user?.lid || "";
-    const botBare = normalizeLid(botJid);
-    const botLidBare = normalizeLid(botLid);
-
-    const ctx = 
-      msg.message?.imageMessage?.contextInfo || 
-      msg.message?.extendedTextMessage?.contextInfo || 
-      null;
-
-    const mentionedJid = ctx?.mentionedJid || [];
-    const mentionedBare = mentionedJid.map(normalizeLid);
-
-    // Cek apakah bot dimention
-    const mentionedMe =
-      mentionedJid.includes(botJid) ||
-      mentionedJid.includes(botLid) ||
-      mentionedBare.includes(botBare) ||
-      mentionedBare.includes(botLidBare);
-
-    // Cek apakah bot direply
-    let replyToMe = false;
-    if (ctx?.quotedMessage) {
-      const qp = ctx.participant || "";
-      const qpBare = normalizeLid(qp);
-      if (
-        qp === botJid ||
-        qp === botLid ||
-        qpBare === botBare ||
-        qpBare === botLidBare
-      ) {
-        replyToMe = true;
-      }
-    }
-
-    if (mentionedMe || replyToMe) {
-      allowBw = true;
-    }
-  }
-
-  // Eksekusi hanya jika di Privat Chat ATAU (Grup + Mention/Reply)
-  if (allowBw) {
-    const handledBw = await handleGrayscale(sock, m, msg);
-    if (handledBw) return;
-  }
-}
     // =============================
     // 8. AI (TANYA ISLAM / UMUM)
     // =============================
