@@ -506,7 +506,7 @@ module.exports = async function (sock, m, msg, store, aiService) {
 
       if (caption.includes("!ht")) {
         console.log("Masuk handler grayscale");
-        await handleGrayscaleImage(sock, m);
+        await handleGrayscaleImage(sock, msg);
         return;
       }
       // =============================
