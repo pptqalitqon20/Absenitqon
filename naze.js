@@ -8,6 +8,7 @@ const { handleAIQuery } = require("./handlers/aiHandler");
 const { sendStruktur, sendVisiMisi, sendProfil } = require("./lib/pptq");
 const { handleDownloaderCommand } = require('./lib/downloader');
 const { getReactionPrompt } = require("./prompt");
+const daftarSurah = require("./data/surah");
 const {
   startHafalanFlow,
   handleHafalanReply,
