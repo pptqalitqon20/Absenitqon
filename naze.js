@@ -465,14 +465,14 @@ if (hasActiveExtractSession(m.chat, m.sender)) {
 // ============================
 if (msg.message?.imageMessage) {
   const caption = (m.text || "").toLowerCase();
-  // ============================
-  // 1️⃣ HITAM PUTIH (!ht)
-  // ============================
-  if (caption.includes("!ht")) {
-    const done = await handleGrayscaleImage(sock, m);
-    if (done) return; // ⛔ STOP DI SINI
-  }
 
+  // ⛔️ COMMAND KHUSUS → BATALKAN MODE PDF
+  if (caption.includes("!ht")) {
+    clearPdfSession(m.chat, m.sender); // ⬅️ WAJIB
+    const done = await handleGrayscaleImage(sock, m);
+    if (done) return;
+  }
+}
   // =============================
   // 2️⃣ IMAGE → PDF (DEFAULT)
   // =============================
@@ -540,7 +540,11 @@ if (msg.message?.imageMessage) {
 // =============================
 // 6b. Follow-up Image→PDF (Y / L)
 // =============================
-if (hasActivePdfSession(m.chat, m.sender)) {
+const text = (m.text || "").toLowerCase();
+if (
+  hasActivePdfSession(m.chat, m.sender) &&
+  !text.includes("!ht")
+) {
   const handledPdfCmd = await handleImageToPDFCommand(
     sock,
     m.chat,        // jid
