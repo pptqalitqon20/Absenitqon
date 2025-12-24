@@ -464,9 +464,7 @@ if (hasActiveExtractSession(m.chat, m.sender)) {
 // IMAGE HANDLER (FINAL)
 // ============================
 if (msg.message?.imageMessage) {
-  const caption =
-    msg.message.imageMessage.caption?.toLowerCase() || "";
-
+  const caption = (m.text || "").toLowerCase();
   // ============================
   // 1️⃣ HITAM PUTIH (!ht)
   // ============================
