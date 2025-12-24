@@ -499,15 +499,19 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // 9. IMAGE HANDLER - GRAYSCALE (!ht) 
     // HARUS DIPINDAHKAN DI SINI, SEBELUM IMAGE→PDF!
     // ============================
-    if (msg.message?.imageMessage) { 
-      const captionRaw = msg.message.imageMessage.caption || m.text || ""; 
-      const caption = captionRaw.toLowerCase().trim(); 
-      
-      if (caption.includes("!ht")) { 
-        await handleGrayscaleImage(sock, m); 
-        return; 
-      }
+    if (msg.message?.imageMessage) {
+      const captionRaw =
+        msg.message.imageMessage.caption || // caption asli dari Baileys
+        msg.message.extendedTextMessage?.text || // kalau dikirim sebagai reply
+        m.text || ""; // fallback terakhir
 
+      const caption = captionRaw.toLowerCase().trim();
+      console.log("DEBUG CAPTION:", caption);
+
+      if (caption.includes("!ht")) {
+        await handleGrayscaleImage(sock, m);
+        return;
+    }
       // =============================
       // 10. IMAGE → PDF (DEFAULT) - SETELAH GRAYSCALE
       // =============================
