@@ -26,7 +26,7 @@ const {
   handleQoriCommand,
 } = require('./handlers/quranHandler');
 // 🔧 Handler PDF (image → PDF, gabung PDF, dsb)
-const { handleGrayscale } = require('./handlers/filterHandler');
+const { handleGrayscaleImage } = require("./lib/handleGrayscale");
 const {
   handleImageToPDFCommand,
   handleImageToPDF,
@@ -460,71 +460,29 @@ if (hasActiveExtractSession(m.chat, m.sender)) {
       await startLaporPekananFlow(sock, m.chat);
       return;
      }
-// =============================
-// 9. FITUR EDIT GAMBAR (BW)
-// =============================
-if (lcText === '.bw' || (msg.message?.imageMessage?.caption?.toLowerCase() === '.bw')) {
-  let allowBw = true;
-
-  // Jika di Group, cek apakah bot dimention atau direply
-  if (isGroup) {
-    allowBw = false;
-    const botJid = sock.user?.id || "";
-    const botLid = sock.user?.lid || "";
-    const botBare = normalizeLid(botJid);
-    const botLidBare = normalizeLid(botLid);
-
-    const ctx = 
-      msg.message?.imageMessage?.contextInfo || 
-      msg.message?.extendedTextMessage?.contextInfo || 
-      null;
-
-    const mentionedJid = ctx?.mentionedJid || [];
-    const mentionedBare = mentionedJid.map(normalizeLid);
-
-    // Cek apakah bot dimention
-    const mentionedMe =
-      mentionedJid.includes(botJid) ||
-      mentionedJid.includes(botLid) ||
-      mentionedBare.includes(botBare) ||
-      mentionedBare.includes(botLidBare);
-
-    // Cek apakah bot direply
-    let replyToMe = false;
-    if (ctx?.quotedMessage) {
-      const qp = ctx.participant || "";
-      const qpBare = normalizeLid(qp);
-      if (
-        qp === botJid ||
-        qp === botLid ||
-        qpBare === botBare ||
-        qpBare === botLidBare
-      ) {
-        replyToMe = true;
-      }
-    }
-
-    if (mentionedMe || replyToMe) {
-      allowBw = true;
-    }
-  }
-
-  // Eksekusi hanya jika di Privat Chat ATAU (Grup + Mention/Reply)
-  if (allowBw) {
-    const handledBw = await handleGrayscale(sock, m, msg);
-    if (handledBw) return;
-  }
-}
-    // =============================
-// 6. PDF: IMAGE → PDF
-// =============================
+// ============================
+// IMAGE HANDLER (FINAL)
+// ============================
 if (msg.message?.imageMessage) {
+  const caption =
+    msg.message.imageMessage.caption?.toLowerCase() || "";
+
+  // ============================
+  // 1️⃣ HITAM PUTIH (!ht)
+  // ============================
+  if (caption.includes("!ht")) {
+    const done = await handleGrayscaleImage(sock, m);
+    if (done) return; // ⛔ STOP DI SINI
+  }
+
+  // =============================
+  // 2️⃣ IMAGE → PDF (DEFAULT)
+  // =============================
   const isGroup = m.isGroup;
   const hasPdfSession = hasActivePdfSession(m.chat, m.sender);
   let allowProcess = true;
 
   if (isGroup && !hasPdfSession) {
-    // --- Grup, tapi BELUM ada sesi aktif: wajib mention / reply ---
     allowProcess = false;
 
     const raw = msg.message || {};
@@ -572,10 +530,10 @@ if (msg.message?.imageMessage) {
 
     const handledImgPdf = await handleImageToPDF(
       sock,
-      m.chat,        // jid
-      msg.message,   // hanya bagian message (imageMessage)
+      m.chat,
+      msg.message,
       m.text || "",
-      m.sender       // userId
+      m.sender
     );
     if (handledImgPdf) return;
   }
