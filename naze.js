@@ -21,7 +21,6 @@ const {
 } = require("./lib/laporPekananWa");
 const { handleRekapUjianCommand } = require("./lib/rekapUjian");
 const {
-  handleSaveAudioCommand,
   handleQuranCommand,
   handleQoriCommand,
 } = require('./handlers/quranHandler');
@@ -331,12 +330,23 @@ module.exports = async function (sock, m, msg, store, aiService) {
           });
           return;
         }
+        if (selectedId && selectedId.startsWith("murottal_surah:")) {
+  const surah = selectedId.split(":")[1];
 
-      } catch (e) {
+  // PANGGIL SEPERTI COMMAND ASLI
+  await handleQuranCommand(
+    sock,
+    m.chat,
+    `!audio ${surah}`, // ⬅️ PAKAI PREFIX
+    m                 // ⬅️ KIRIM CONTEXT
+  );
+
+  return;
+}
+     } catch (e) {
         console.error("Error interactiveResponseMessage PPTQ/Hafalan:", e);
       }
     }
-
     // =====================================================
     // 3. HANDLE KLIK TOMBOL QUICK REPLY (buttonsResponse)
     // =====================================================
@@ -395,23 +405,50 @@ module.exports = async function (sock, m, msg, store, aiService) {
         });
         return;
       }
-
       if (btnId === "download_murottal") {
-        await sock.sendMessage(m.chat, {
-          text:
-            "🎧 Download Murottal\n\n" +
-            "Contoh Format perintah yang bisa digunakan👇:\n\n" +
-            "- !audio 114 → Surah An-Naas\n" +
-            "- !audio 1 → Surah Al-Fatihah\n" +
-            "- !audio 1:7 → Surah Al-Fatihah ayat 7\n" +
-            "- !qori → Pilih Qori 7\n\n" +
-            "(Fitur Download Video/Audio YouTube Sudah Bisa Diganakan Lagi). \n" +
-            "Silahkan kirim perintah murottal di atas."
-        });
-        return;
-      }
-    }
+  const rows = daftarSurah.map((s) => ({
+  title: `Surah ${s.latin}`,
+  description: `${s.arab} • ${s.arti}`,
+  id: `murottal_surah:${s.no}`,
+}));
 
+  const params = {
+    title: "Pilih Surah",
+    sections: [
+      {
+        title: "📖 Daftar Surah Al-Qur'an",
+        rows,
+      },
+    ],
+  };
+
+  await sendButtonMsg(
+    sock,
+    m.chat,
+    {
+      text:
+        "🎧 *Download Murottal*\n\n" +
+        "⏭️Silakan pilih surah melalui tombol di bawah ini.",
+      footer: "PPTQ AL-ITQON",
+      buttons: [
+        {
+          buttonId: "murottal_list",
+          type: 2,
+          buttonText: { displayText: "📖 Pilih Surah" },
+          nativeFlowInfo: {
+            name: "single_select",
+            paramsJson: JSON.stringify(params),
+          },
+        },
+      ],
+      headerType: 1,
+    },
+    {}
+  );
+
+  return;
+  }
+}
     // =====================================================
     // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1,2,3)
     // =====================================================
@@ -465,14 +502,13 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // 9. IMAGE HANDLER - GRAYSCALE (!ht) 
     // HARUS DIPINDAHKAN DI SINI, SEBELUM IMAGE→PDF!
     // ============================
-    if (msg.message?.imageMessage) {
-      const caption = (m.text || "").toLowerCase().trim();
-
-      // ⛔️ COMMAND KHUSUS → GRAYSCALE
-      if (caption.includes("!ht")) {
-        // Langsung proses grayscale, tidak perlu clearPdfSession
-        const done = await handleGrayscaleImage(sock, m);
-        if (done) return; // ← JIKA BERHASIL, BERHENTI DI SINI
+    if (msg.message?.imageMessage) { 
+      const captionRaw = msg.message.imageMessage.caption || m.text || ""; 
+      const caption = captionRaw.toLowerCase().trim(); 
+      
+      if (caption.includes("!ht")) { 
+        await handleGrayscaleImage(sock, m); 
+        return; 
       }
 
       // =============================
