@@ -476,7 +476,7 @@ if (msg.message?.imageMessage) {
   // =============================
   // 2️⃣ IMAGE → PDF (DEFAULT)
   // =============================
-  const isGroup = m.isGroup;
+  isGroup = m.isGroup;
   const hasPdfSession = hasActivePdfSession(m.chat, m.sender);
   let allowProcess = true;
 
@@ -535,15 +535,12 @@ if (msg.message?.imageMessage) {
     );
     if (handledImgPdf) return;
   }
-}
-
-// =============================
 // 6b. Follow-up Image→PDF (Y / L)
 // =============================
-const text = (m.text || "").toLowerCase();
+// Kita gunakan variabel 'lcText' yang sudah ada di baris 63
 if (
   hasActivePdfSession(m.chat, m.sender) &&
-  !text.includes("!ht")
+  !lcText.includes("!ht")
 ) {
   const handledPdfCmd = await handleImageToPDFCommand(
     sock,
