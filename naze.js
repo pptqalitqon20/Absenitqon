@@ -473,9 +473,6 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // =============================
     // 6. MUROTTAL (!audio ...)
     // =============================
-    const saved = await handleSaveAudioCommand(sock, m);
-    if (saved) return;
-
     const qoriHandled = await handleQoriCommand(sock, m.chat, text);
     if (qoriHandled) return;
 
