@@ -59,6 +59,25 @@ async function getSurahList() {
   SURAH_CACHE_TIME = now;
   return list;
 }
+function buildSurahInfoMessage(surah) {
+  const qariName = QARI_MAP[CURRENT_QARI] || "Unknown";
+  const separator = "─".repeat(28); // Garis pemisah
+  
+  return (
+    `🎧 *Murottal: ${surah.namaLatin}* / ${surah.nama}\n` +
+    `👳 *Syeikh:* ${qariName}\n` +
+    `📖 *Surah ke:* ${surah.nomor}\n` +
+    `📰 *Arti:* ${surah.arti}\n` +
+    `💌 *Jumlah Ayat:* ${surah.jumlahAyat}\n` +
+    `\n${separator}\n` + // Garis pemisah
+    `*Ket :*\n\n` +
+    `\`Untuk Pilih Qori\`\n` +
+    `⌨️Ketik 👉 *!qori* 👈 untuk pilihan qori.\n\n` +
+    `\`Untuk Download Audio Per ayat\`\n` +
+    `⌨️Ketik 👉 *!audio:(no.surah):(ayat)👈*.\n` +
+    `Contoh Kamu Mau Surah Al-Baqarah Ayat 2, Berarti Kamu Ketik: !audio 2:2`
+  );
+}
 
 async function getSurahInfoByNumber(num) {
   const list = await getSurahList();
@@ -337,7 +356,6 @@ async function handleQoriCommand(sock, jid, text) {
 async function handleQuranCommand(sock, jid, text /*, m */) {
   const parsed = parseAudioArgs(text);
   if (!parsed) {
-    // Bukan format yang kita dukung, biarkan handler lain yang urus
     return false;
   }
 
@@ -345,50 +363,47 @@ async function handleQuranCommand(sock, jid, text /*, m */) {
 
   if (!surah || surah < 1 || surah > 114) {
     await sock.sendMessage(jid, {
-      text: '⚠️ Format: *!audio [surat]* atau *!audio [surat] [ayat]*\nContoh: `!audio 97` atau `!audio 97 3`',
+      text:
+        '⚠️ Format: *!audio [surat]* atau *!audio [surat] [ayat]*\n' +
+        'Contoh: `!audio 97` atau `!audio 97 3`',
     });
     return true;
   }
 
+  // 🔹 Ambil data surah (cache)
+  const surahList = await getSurahList();
+  const surahData = surahList.find((s) => s.nomor === surah);
+
+  // 🔹 Kirim info surah DULU
+  if (surahData) {
+    const infoText = buildSurahInfoMessage(surahData);
+    await sock.sendMessage(jid, { text: infoText });
+  }
+
+  // 🔹 Baru kirim audio
   if (!ayat) {
-    // Full surat - pakai CURRENT_QARI
-    return await sendFullSurahAudio(sock, jid, surah, CURRENT_QARI);
+    await sendFullSurahAudio(sock, jid, surah, CURRENT_QARI);
+    return true;
   }
 
-  // Per ayat - pakai CURRENT_QARI
-  return await sendAyatAudio(sock, jid, surah, ayat, CURRENT_QARI);
-}
-
-// ==============================
-// STUB: !saveaudio (tidak dipakai lagi)
-// ==============================
-// Di index/messageHandler antum mungkin masih panggil handleSaveAudioCommand,
-// jadi di sini kita buat versi ringan agar tidak error.
-async function handleSaveAudioCommand(sock, m) {
-  const rawText =
-    (m && m.body) ||
-    (m && m.message && (m.message.conversation || m.message.extendedTextMessage?.text)) ||
-    '';
-
-  const text = String(rawText || '').trim().toLowerCase();
-  if (!/^!saveaudio\b/.test(text)) {
-    // Bukan perintah !saveaudio, biarkan handler lain
-    return false;
-  }
-
-  const jid = m.chat || m.key?.remoteJid;
-
-  await sock.sendMessage(jid, {
-    text:
-      'ℹ️ Sekarang bot mengambil murottal langsung dari *API EQuran.id*.\n' +
-      'Perintah *!saveaudio* tidak digunakan lagi.',
-  });
-
+  await sendAyatAudio(sock, jid, surah, ayat, CURRENT_QARI);
   return true;
 }
-
+async function getAllSurahOptions() {
+  try {
+    const list = await getSurahList(); 
+    return list.map(s => ({
+      id: `!audio ${s.nomor}`, // Ini akan menjadi perintah saat diklik
+      title: `${s.nomor}. ${s.namaLatin}`,
+      description: `${s.jumlahAyat} Ayat | ${s.tempatTurun}`
+    }));
+  } catch (err) {
+    console.error("Gagal ambil daftar surah:", err);
+    return [];
+  }
+}
 module.exports = {
-  handleSaveAudioCommand,
   handleQuranCommand,
   handleQoriCommand,
+  getAllSurahOptions, 
 };
