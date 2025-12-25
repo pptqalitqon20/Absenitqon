@@ -17,7 +17,7 @@
 // - Konfigurasi qori hanya disimpan di memory (kalau server restart, balik ke default)
 
 const axios = require('axios');
-
+const { sendButtonMsg } = require("../lib/sendButton");
 const EQURAN_BASE = 'https://equran.id/api/v2';
 
 // Daftar qori berdasarkan kode di EQuran.id
