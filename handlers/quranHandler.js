@@ -353,14 +353,67 @@ async function handleQoriCommand(sock, jid, text) {
 // ==============================
 // HANDLER UTAMA: !audio ...
 // ==============================
-async function handleQuranCommand(sock, jid, text) {
+async function handleQuranCommand(sock, jid, text, m) {
   const parsed = parseAudioArgs(text);
-  if (!parsed) return false;
 
+  // 🔹 Jika user hanya ketik "!audio" tanpa argumen
+  if (!parsed) {
+    try {
+      const list = await getSurahList();
+      const rows = list.map((s) => ({
+        title: `Surah ${s.namaLatin}`,
+        description: `${s.nama} • ${s.arti}`,
+        id: `murottal_surah:${s.nomor}`,
+      }));
+
+      const params = {
+        title: "Pilih Surah",
+        sections: [
+          {
+            title: "📖 Daftar Surah Al-Qur'an",
+            rows,
+          },
+        ],
+      };
+
+      await sendButtonMsg(sock, jid, {
+        text:
+          "🎧 *Download Murottal*\n\n" +
+          "⏭️Silakan pilih surah melalui tombol di bawah ini.",
+        footer: "PPTQ AL-ITQON",
+        buttons: [
+          {
+            buttonId: "murottal_list",
+            type: 2,
+            buttonText: { displayText: "📖 Pilih Surah" },
+            nativeFlowInfo: {
+              name: "single_select",
+              paramsJson: JSON.stringify(params),
+            },
+          },
+        ],
+        headerType: 1,
+      });
+
+      return true;
+    } catch (err) {
+      console.error("Gagal menampilkan daftar surah:", err);
+      await sock.sendMessage(jid, {
+        text: "❌ Gagal mengambil daftar surah. Coba lagi beberapa saat.",
+      });
+      return true;
+    }
+  }
+
+  // 🔹 Kalau ada argumen, lanjut proses seperti biasa
   const { surah, ayat } = parsed;
 
   if (!surah || surah < 1 || surah > 114) {
-    await sock.sendMessage(jid, { text: '⚠️ Format salah.' });
+    await sock.sendMessage(jid, {
+      text:
+        '⚠️ Format: *!audio [surat]* atau *!audio [surat] [ayat]*\n' +
+        'Contoh: `!audio 97` atau `!audio 97 3`',
+    });
     return true;
   }
 
@@ -373,13 +426,14 @@ async function handleQuranCommand(sock, jid, text) {
   const surahList = await getSurahList();
   const surahData = surahList.find((s) => s.nomor === surah);
 
-  // 🔹 Kirim info surah + audio
+  // 🔹 Kirim audio
   if (!ayat) {
     await sendFullSurahAudio(sock, jid, surah, CURRENT_QARI);
   } else {
     await sendAyatAudio(sock, jid, surah, ayat, CURRENT_QARI);
   }
 
+  // 🔹 Kirim info surah
   if (surahData) {
     const infoText = buildSurahInfoMessage(surahData);
     await sock.sendMessage(jid, { text: infoText });
