@@ -75,7 +75,7 @@ function buildSurahInfoMessage(surah) {
     `⌨️Ketik 👉 *!qori* 👈 untuk pilihan qori.\n\n` +
     `\`Untuk Download Audio Per ayat\`\n` +
     `⌨️Ketik 👉 *!audio:(no.surah):(ayat)👈*.\n` +
-    `Contoh Kamu Mau Surah Al-Baqarah Ayat 2, Berarti Kamu Ketik: !audio 2:2`
+    `Contoh Kamu Mau Surah Al-Baqarah Ayat 2, Berarti Kamu Ketik: !audio:2:2`
   );
 }
 
@@ -353,42 +353,50 @@ async function handleQoriCommand(sock, jid, text) {
 // ==============================
 // HANDLER UTAMA: !audio ...
 // ==============================
-async function handleQuranCommand(sock, jid, text /*, m */) {
+async function handleQuranCommand(sock, jid, text) {
   const parsed = parseAudioArgs(text);
-  if (!parsed) {
-    return false;
-  }
+  if (!parsed) return false;
 
   const { surah, ayat } = parsed;
 
   if (!surah || surah < 1 || surah > 114) {
-    await sock.sendMessage(jid, {
-      text:
-        '⚠️ Format: *!audio [surat]* atau *!audio [surat] [ayat]*\n' +
-        'Contoh: `!audio 97` atau `!audio 97 3`',
-    });
+    await sock.sendMessage(jid, { text: '⚠️ Format salah.' });
     return true;
   }
 
-  // 🔹 Ambil data surah (cache)
+  // 🔹 Kirim pesan loading dulu
+  const loadingMsg = await sock.sendMessage(jid, {
+    text: "⏳ Mohon tunggu, saya sedang mendownload murottal..."
+  });
+
+  // 🔹 Ambil data surah
   const surahList = await getSurahList();
   const surahData = surahList.find((s) => s.nomor === surah);
 
-  // 🔹 Kirim info surah DULU
+  // 🔹 Kirim info surah + audio
+  if (!ayat) {
+    await sendFullSurahAudio(sock, jid, surah, CURRENT_QARI);
+  } else {
+    await sendAyatAudio(sock, jid, surah, ayat, CURRENT_QARI);
+  }
+
   if (surahData) {
     const infoText = buildSurahInfoMessage(surahData);
     await sock.sendMessage(jid, { text: infoText });
   }
 
-  // 🔹 Baru kirim audio
-  if (!ayat) {
-    await sendFullSurahAudio(sock, jid, surah, CURRENT_QARI);
-    return true;
+  // 🔹 Hapus pesan loading setelah audio siap
+  try {
+    await sock.sendMessage(jid, {
+      delete: loadingMsg.key
+    });
+  } catch (err) {
+    console.error("Gagal hapus pesan loading:", err);
   }
 
-  await sendAyatAudio(sock, jid, surah, ayat, CURRENT_QARI);
   return true;
 }
+// jadi di sini kita buat versi ringan agar tidak error.
 async function getAllSurahOptions() {
   try {
     const list = await getSurahList(); 
