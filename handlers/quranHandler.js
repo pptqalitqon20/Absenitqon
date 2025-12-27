@@ -75,7 +75,7 @@ function buildSurahInfoMessage(surah) {
     `⌨️Ketik 👉 *!qori* 👈 untuk pilihan qori.\n\n` +
     `\`Untuk Download Audio Per ayat\`\n` +
     `⌨️Ketik 👉 *!audio:(no.surah):(ayat)👈*.\n` +
-    `Contoh Kamu Mau Surah Al-Baqarah Ayat 2, Berarti Kamu Ketik: !audio:2:2`
+    `Contoh Kamu Mau Surah Al-Baqarah Ayat 2, Berarti Kamu Ketik: !audio 2:2`
   );
 }
 
