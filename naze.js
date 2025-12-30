@@ -45,6 +45,12 @@ const {
   handlePdfExtractCommand,
   hasActiveExtractSession
 } = require('./handlers/pdfExtractHandler');
+
+const {
+  handleWordToPdf,
+  handleWordToPdfCommand,
+  hasActiveWordSession,
+} = require('./handlers/wordToPdfHandler');
 const islamModeSessions = new Map();
 
 // Normalize JID / LID ke bentuk "bare" biar gampang dibandingkan
@@ -495,7 +501,14 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // =============================
     const laporHandledText = await handleLaporPekananTextReply(sock, m);
     if (laporHandledText) return;
-
+    // word to pdf
+    const handledWordCmd = await handleWordToPdfCommand(
+      sock,
+      m.chat,
+      m.text || '',
+      m.sender
+     );
+    if (handledWordCmd) return;
     // ============================
     // 9. IMAGE HANDLER - GRAYSCALE (!ht) 
     // HARUS DIPINDAHKAN DI SINI, SEBELUM IMAGE→PDF!
@@ -591,7 +604,18 @@ module.exports = async function (sock, m, msg, store, aiService) {
       );
       if (handledPdfCmd) return;
     }
-
+    // =============================
+    // WORD → PDF (HARUS DI ATAS PDF MERGE)
+    // =============================
+    if (msg.message?.documentMessage) {
+      const handledWord = await handleWordToPdf(
+       sock,
+       m.chat,
+       msg.message,
+       m.sender
+    );
+      if (handledWord) return;
+}
     // =============================
     // 12. PDF: MERGE / EXTRACT
     // =============================
