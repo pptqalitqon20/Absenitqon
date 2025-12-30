@@ -139,5 +139,44 @@ async function convertPdfToJpg(pdfPath) {
     throw new Error('Gagal mengkonversi PDF ke Gambar dengan iLovePDF.');
   }
 }
+/**
+ * Mengkonversi Word (DOC / DOCX) menjadi PDF menggunakan iLovePDF API.
+ *
+ * @param {string} wordPath - Path lengkap ke file Word lokal.
+ * @returns {Promise<Buffer>} - Buffer PDF hasil konversi.
+ */
+async function convertWordToPdf(wordPath) {
+  if (!fs.existsSync(wordPath)) {
+    throw new Error('File Word tidak ditemukan di path lokal.');
+  }
 
-module.exports = { convertPdfToJpg };
+  let task;
+  try {
+    console.log('🔄 [DEBUG] Starting Word to PDF conversion...');
+
+    // TASK iLovePDF untuk Office → PDF
+    task = instance.newTask('officepdf');
+    await task.start();
+
+    const file = new ILovePDFFile(wordPath);
+    await task.addFile(file);
+
+    await task.process();
+
+    const pdfBuffer = await task.download();
+    console.log('📄 [DEBUG] PDF buffer size:', pdfBuffer.length);
+
+    return pdfBuffer;
+
+  } catch (err) {
+    console.error('❌ iLovePDF Word → PDF gagal:', err.message || err);
+    throw new Error('Gagal mengkonversi Word ke PDF.');
+  }
+}
+
+
+module.exports = {
+  convertPdfToJpg,
+  convertWordToPdf, // ⬅️ TAMBAHKAN INI
+};
+
