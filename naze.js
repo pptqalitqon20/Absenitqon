@@ -384,7 +384,7 @@ module.exports = async function (sock, m, msg, store, aiService) {
         return startHafalanFlow(sock, m.chat);
       }
       if (btnId === "hafalan_daftar_ujian") {
-        return handleRekapUjianCommand(sock, m.chat, "3");
+        return handleRekapUjianCommand(sock, m.chat, "5");
       }
       if (btnId === "hafalan_program") {
         return sendProgramKetahfidzan(sock, m.chat);
@@ -459,18 +459,14 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // =====================================================
     // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1,2,3)
     // =====================================================
-    if (["1", "2", "3"].includes(lcText)) {
-      if (lcText === "1") {
-        return sendStruktur(sock, m);
-      }
-      if (lcText === "2") {
-        return startHafalanFlow(sock, m.chat);
-      }
-      if (lcText === "3") {
-        return handleRekapUjianCommand(sock, m.chat, "3");
-      }
+    if (["1", "2", "3", "4", "5", "6"].includes(lcText)) {
+      if (lcText === "1") return sendStruktur(sock, m);
+      if (lcText === "2") return sendVisiMisi(sock, m);
+      if (lcText === "3") return sendProfil(sock, m);
+      if (lcText === "4") return startHafalanFlow(sock, m.chat);
+      if (lcText === "5") return handleRekapUjianCommand(sock, m.chat, "5");
+      if (lcText === "6") return sendProgramKetahfidzan(sock, m.chat);
     }
-
     // =============================
     // 5. DOWNLOADER COMMANDS
     // =============================
