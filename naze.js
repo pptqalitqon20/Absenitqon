@@ -1,5 +1,13 @@
 // naze.js - Router khusus BOT PPTQ AL-ITQON
+// ==== INIT TEMP DIR (PALING ATAS) ====
+const fs = require('fs');
+const path = require('path');
 
+const tempDir = path.join(__dirname, 'temp');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+// ==== END INIT ====
 const { handleMenu } = require("./lib/menu");
 const { handleAllMenu } = require("./lib/allmenu");
 const { sendButtonMsg } = require("./lib/sendButton");
@@ -51,6 +59,10 @@ const {
   handleWordToPdfCommand,
   hasActiveWordSession,
 } = require('./handlers/wordToPdfHandler');
+const {
+  handlePdfToWord
+} = require('./handlers/pdfToWordHandler');
+
 const islamModeSessions = new Map();
 
 // Normalize JID / LID ke bentuk "bare" biar gampang dibandingkan
