@@ -105,8 +105,10 @@ const ACTION_PROMPT_TEXT = `Afwan, mau saya apakan PDF ini yah?
 Balas salah satu:
 • *G* → Gabungkan dengan PDF lain (*Merge*)
 • *Ex* → Ambil beberapa halaman (*Extract*)
+• *W* → Ubah PDF ke Word (*PDF → DOCX*)
 
 *(Waktu sesi akan habis dalam 5 menit atau ketik *batal* jika ingin membatalkan)*`;
+
 
 const MERGE_PROMPT_TEXT = (count) => (
 `Afwan, tolong kirimkan PDF lagi yang mau digabungkan!
@@ -209,7 +211,13 @@ async function handlePdfMergeCommand(sock, jid, message, text, userId) {
       const { startPdfExtractFlow } = require('./pdfExtractHandler');
       return await startPdfExtractFlow(sock, jid, s);
     }
-    return false; // bukan G/Ex
+
+    if (['w', 'word', 'pdf2word'].includes(clean)) {
+      await deleteLastPrompt(sock, jid, s);
+      const { startPdfToWord } = require('./pdfToWordHandler');
+      return await startPdfToWord(sock, jid, s);
+    }
+    return false;
   }
   // --- END NEW: Handle pilihan Aksi G/Ex ---
   
