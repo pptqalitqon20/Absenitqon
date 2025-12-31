@@ -5,8 +5,7 @@ function convertPdfToWord(pdfPath, docxPath) {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(__dirname, '../tools/pdf_to_word.py');
 
-    const cmd = `python "${scriptPath}" "${pdfPath}" "${docxPath}"`;
-
+    const cmd = `python3 "${scriptPath}" "${pdfPath}" "${docxPath}"`;
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
         console.error('Python stderr:', stderr);
