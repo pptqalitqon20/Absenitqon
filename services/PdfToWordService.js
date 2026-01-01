@@ -1,18 +1,25 @@
-const { exec } = require('child_process');
-const path = require('path');
+const fs = require('fs');
+const CloudmersiveConvertApiClient =
+  require('cloudmersive-convert-api-client');
 
-function convertPdfToWord(pdfPath, docxPath) {
+const defaultClient =
+  CloudmersiveConvertApiClient.ApiClient.instance;
+
+defaultClient.authentications['Apikey'].apiKey =
+  process.env.CLOUDMERSIVE_API_KEY;
+
+const api = new CloudmersiveConvertApiClient.ConvertDocumentApi();
+
+async function convertPdfToWord(pdfPath, docxPath) {
   return new Promise((resolve, reject) => {
-    const scriptPath = path.join(__dirname, '../tools/pdf_to_word.py');
-
-    const cmd = `python3 "${scriptPath}" "${pdfPath}" "${docxPath}"`;
-    exec(cmd, (err, stdout, stderr) => {
-      if (err) {
-        console.error('Python stderr:', stderr);
-        return reject(err);
+    api.convertDocumentPdfToDocx(
+      fs.createReadStream(pdfPath),
+      (error, data) => {
+        if (error) return reject(error);
+        fs.writeFileSync(docxPath, data);
+        resolve(docxPath);
       }
-      resolve(docxPath);
-    });
+    );
   });
 }
 
