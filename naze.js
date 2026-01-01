@@ -52,6 +52,9 @@ const {
   handleWordToPdfCommand,
   hasActiveWordSession,
 } = require('./handlers/wordToPdfHandler');
+const {
+  startPdfToWord
+} = require('./handlers/pdfToWordHandler');
 const islamModeSessions = new Map();
 
 // Normalize JID / LID ke bentuk "bare" biar gampang dibandingkan
