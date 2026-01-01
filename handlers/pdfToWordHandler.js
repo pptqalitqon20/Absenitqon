@@ -1,5 +1,5 @@
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 const { convertPdfToWord } = require('../services/pdfToWordService');
 
 async function startPdfToWord(sock, jid, session) {
@@ -13,19 +13,18 @@ async function startPdfToWord(sock, jid, session) {
 
   await sock.sendMessage(jid, { text: '⏳ Mengubah PDF ke Word...' });
 
-  // ⬇️ WAJIB kirim 2 parameter
   await convertPdfToWord(pdfPath, docxPath);
 
-  // ⬇️ Pastikan file memang ada
-  if (!fs.existsSync(docxPath)) {
-    throw new Error('File DOCX tidak ditemukan setelah konversi');
-  }
-
   await sock.sendMessage(jid, {
-    document: fs.readFileSync(docxPath),
-    mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    document: { url: docxPath },
+    mimetype:
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     fileName: path.basename(docxPath),
   });
+
+  fs.unlinkSync(pdfPath);
+  fs.unlinkSync(docxPath);
+  session.cleanup?.();
 
   return true;
 }
