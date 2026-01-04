@@ -7,10 +7,10 @@ class AIService {
     this.apiKey = apiKey;
     this.baseURL = 'https://openrouter.ai/api/v1';
     this.models = [
+      "openai/gpt-oss-120b:free",
       "openai/gpt-oss-20b:free",
-      "x-ai/grok-4.1-fast:free",
-      "google/gemma-3n-e4b-it:free",
-      "meta-llama/llama-3.3-8b-instruct:free",
+      "tngtech/deepseek-r1t2-chimera:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
       "microsoft/mai-ds-r1:free"
     ];
     
