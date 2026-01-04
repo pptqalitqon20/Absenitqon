@@ -236,236 +236,235 @@ module.exports = async function (sock, m, msg, store, aiService) {
     // =========================================================
     // 2. HANDLE PILIHAN LIST (native_flow → interactiveResponse)
     // =========================================================
-    if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage) {
-      try {
-        const res =
-          msg.message.interactiveResponseMessage.nativeFlowResponseMessage;
-        const data = JSON.parse(res.paramsJson || "{}");
-        const selectedId = data.id || data.row_id || data.selectedRowId;
+if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage) {
+  try {
+    const res =
+      msg.message.interactiveResponseMessage.nativeFlowResponseMessage;
+    const data = JSON.parse(res.paramsJson || "{}");
+    const selectedId = data.id || data.row_id || data.selectedRowId;
 
-        console.log("Interactive selected:", data);
+    console.log("Interactive selected:", data);
 
-        // laporan Pekanan
-        const laporHandledList = await handleLaporPekananListSelection(sock, m, selectedId);
-        if (laporHandledList) return;
+    // laporan Pekanan
+    const laporHandledList = await handleLaporPekananListSelection(
+      sock,
+      m,
+      selectedId
+    );
+    if (laporHandledList) return;
 
-        // 1) Jika user pilih "🏫 Fitur PPTQ AL-ITQON"
-        if (selectedId === "pptq_menu" || selectedId === "menu_pptq") {
-          await sendButtonMsg(sock, m.chat, {
-            text: "📂 Anda memilih: *Fitur PPTQ AL-ITQON*\n\n" +
-              "Silakan pilih salah satu menu di bawah ini👇:",
-            footer: "PPTQ AL-ITQON",
-            mentions: [m.sender],
-            buttons: [
-              {
-                buttonId: "pptq_struktur",
-                buttonText: { displayText: "🏫 Struktur Organisasi" },
-                type: 1,
-              },
-              {
-                buttonId: "pptq_visimisi",
-                buttonText: { displayText: "🎯 Visi & Misi" },
-                type: 1,
-              },
-              {
-                buttonId: "pptq_profil",
-                buttonText: { displayText: "📘 Profil PPTQ AL-ITQON" },
-                type: 1,
-              },
-            ],
-            headerType: 1,
-          });
-          return;
-        }
-
-        // 2) Jika user pilih "📖 Fitur Ketahfidzan"
-        if (selectedId === "ketahfidzan_menu" || selectedId === "menu_hafalan") {
-          await sendButtonMsg(sock, m.chat, {
-            text: "📂 Anda memilih: *Fitur Ketahfidzan*\n\n" +
-              "Silakan pilih salah satu menu di bawah ini👇:",
-            footer: "PPTQ AL-ITQON",
-            mentions: [m.sender],
-            buttons: [
-              {
-                buttonId: "hafalan_lihat",
-                buttonText: { displayText: "📖 Lihat Hafalan Santri" },
-                type: 1,
-              },
-              {
-                buttonId: "hafalan_daftar_ujian",
-                buttonText: { displayText: "📝 Daftar Santri Selesai Ujian" },
-                type: 1,
-              },
-              {
-                buttonId: "hafalan_program",
-                buttonText: { displayText: "📚 Program Ketahfidzan" },
-                type: 1,
-              },
-            ],
-            headerType: 1,
-          });
-          return;
-        }
-
-        // 3) List halaqah dari Sheets
-        if (selectedId && selectedId.startsWith("hafalan_halaqah:")) {
-          const kode = selectedId.split(":")[1];
-          await handleHafalanSelection(sock, m, kode);
-          return;
-        }
-
-        // 4) Fitur Keislaman
-        if (selectedId === "tanya_menu_info" || selectedId === "menu_islam") {
-          await sendButtonMsg(sock, m.chat, {
-            text: "🕌 Anda memilih: *Fitur Keislaman*\n\n" +
-              "Silahkan pilih aksi di bawah ini:\n" +
-              "- Tanya Islam Bebas\n" +
-              "- Download Murottal\n\n" +
-              "Klik salah satu tombol di bawah ini 👇",
-            footer: "PPTQ AL-ITQON",
-            mentions: [m.sender],
-            buttons: [
-              {
-                buttonId: "tanya_islam",
-                buttonText: { displayText: "🧕 Tanya Islam Bebas" },
-                type: 1,
-              },
-              {
-                buttonId: "download_murottal",
-                buttonText: { displayText: "🎧 Download Murottal" },
-                type: 1,
-              },
-            ],
-            headerType: 1,
-          });
-          return;
-        }
-
-        // 5) Fitur Bermanfaat / Tools
-        if (selectedId === "tools_menu_info" || selectedId === "menu_tools") {
-          await sock.sendMessage(m.chat, {
-            text: "*⚙️ FITUR BERMANFAAT (TOOLS)*\n\n" +
-              "*📄 Fitur PDF*\n" +
-              "📌 *Ubah Gambar ke PDF*\n" +
-              " - Kirimkan saya *gambar* di chat pribadi.\n" +
-              " - Jika di *grup*, kirim gambar + *tag saya*.\n\n" +
-              "📌 *Gabung beberapa PDF jadi 1*\n" +
-              " - Kirimkan saya *berkas PDF*.\n" +
-              " - Jika di grup, kirim PDF + *tag saya*.\n\n" +
-              "📌 *Ambil halaman tertentu dari PDF*\n" +
-              " - Kirim berkas PDF + instruksi halaman.\n\n" +
-              "*⏬ Fitur Download*\n" +
-              "📹 *Download Video Youtube, Facebook, Tiktok, Instagram, Ig Story.*\n" +
-              " - Perintahnya: !ytmp4 <link Youtube>.\n" +
-              " - Perintahnya: !fb <link Facebook>.\n" +
-              " - Perintahnya: !tt <link Tiktok>.\n" +
-              " - Perintahnya: !ig <link Instagram>.\n" +
-              " - Perintahnya: !igstory <link igstory>.\n" +
-              "🎧 *Download Audio Youtube, Audio Tiktok,.*\n" +
-              " - Perintahnya: !ytmp3 <link Youtube>.\n" +
-              " - Perintahnya: !ttmp3 <link Tiktok>.\n" +
-              "_Silakan mulai dengan mengirim gambar, PDF & link sesuai kebutuhan._",
-          });
-          return;
-        }
-        if (selectedId && selectedId.startsWith("murottal_surah:")) {
-  const surah = selectedId.split(":")[1];
-
-  // PANGGIL SEPERTI COMMAND ASLI
-  await handleQuranCommand(
-    sock,
-    m.chat,
-    `!audio ${surah}`, // ⬅️ PAKAI PREFIX
-    m                 // ⬅️ KIRIM CONTEXT
-  );
-
-  return;
-}
-     } catch (e) {
-        console.error("Error interactiveResponseMessage PPTQ/Hafalan:", e);
-      }
+    // 1) Jika user pilih "🏫 Fitur PPTQ AL-ITQON"
+    if (selectedId === "pptq_menu" || selectedId === "menu_pptq") {
+      await sendButtonMsg(sock, m.chat, {
+        text:
+          "📂 Anda memilih: *Fitur PPTQ AL-ITQON*\n\n" +
+          "Silakan pilih salah satu menu di bawah ini👇:",
+        footer: "PPTQ AL-ITQON",
+        mentions: [m.sender],
+        buttons: [
+          {
+            buttonId: "pptq_struktur",
+            buttonText: { displayText: "🏫 Struktur Organisasi" },
+            type: 1,
+          },
+          {
+            buttonId: "pptq_visimisi",
+            buttonText: { displayText: "🎯 Visi & Misi" },
+            type: 1,
+          },
+          {
+            buttonId: "pptq_profil",
+            buttonText: { displayText: "📘 Profil PPTQ AL-ITQON" },
+            type: 1,
+          },
+        ],
+        headerType: 1,
+      });
+      return;
     }
-    // =====================================================
-    // 3. HANDLE KLIK TOMBOL QUICK REPLY (buttonsResponse)
-    // =====================================================
-    if (msg.message?.buttonsResponseMessage) {
-      const btn = msg.message.buttonsResponseMessage;
-      const btnId = btn.selectedButtonId || btn.selectedDisplayText;
-      console.log("Button clicked:", btnId);
-      
-      // delegasi ke handler Text→PDF
-      const textPdfHandled = await handleTextPdfButton(sock, m, btnId);
-      if (textPdfHandled) return;
-      // Tombol khusus: SEMUA MENU
-      if (btnId === "all_menu") {
-        return handleAllMenu(sock, m);
-      }
 
-      // Sub-menu PPTQ
-      if (btnId === "pptq_struktur") {
-        return sendStruktur(sock, m);
-      }
-      if (btnId === "pptq_visimisi") {
-        return sendVisiMisi(sock, m);
-      }
-      if (btnId === "pptq_profil") {
-        return sendProfil(sock, m);
-      }
+    // 2) Jika user pilih "📖 Fitur Ketahfidzan"
+    if (selectedId === "ketahfidzan_menu" || selectedId === "menu_hafalan") {
+      await sendButtonMsg(sock, m.chat, {
+        text:
+          "📂 Anda memilih: *Fitur Ketahfidzan*\n\n" +
+          "Silakan pilih salah satu menu di bawah ini👇:",
+        footer: "PPTQ AL-ITQON",
+        mentions: [m.sender],
+        buttons: [
+          {
+            buttonId: "hafalan_lihat",
+            buttonText: { displayText: "📖 Lihat Hafalan Santri" },
+            type: 1,
+          },
+          {
+            buttonId: "hafalan_daftar_ujian",
+            buttonText: { displayText: "📝 Daftar Santri Selesai Ujian" },
+            type: 1,
+          },
+          {
+            buttonId: "hafalan_program",
+            buttonText: { displayText: "📚 Program Ketahfidzan" },
+            type: 1,
+          },
+        ],
+        headerType: 1,
+      });
+      return;
+    }
 
-      // Sub-menu Ketahfidzan
-      if (btnId === "hafalan_lihat") {
-        return startHafalanFlow(sock, m.chat);
-      }
-      if (btnId === "hafalan_daftar_ujian") {
-        return handleRekapUjianCommand(sock, m.chat, "5");
-      }
-      if (btnId === "hafalan_program") {
-        return sendProgramKetahfidzan(sock, m.chat);
-      }
+    // 3) List halaqah dari Sheets
+    if (selectedId && selectedId.startsWith("hafalan_halaqah:")) {
+      const kode = selectedId.split(":")[1];
+      await handleHafalanSelection(sock, m, kode);
+      return;
+    }
 
-      // Sub-menu Menu Islam
-      if (btnId === "tanya_islam") {
-        if (m.isGroup) {
-          const key = `${m.chat}:${m.sender}`;
-          islamModeSessions.set(key, {
-            startedAt: Date.now(),
-            lastActivity: Date.now(),
-          });
-        }
+    // 4) Fitur Keislaman
+    if (selectedId === "tanya_menu_info" || selectedId === "menu_islam") {
+      await sendButtonMsg(sock, m.chat, {
+        text:
+          "🕌 Anda memilih: *Fitur Keislaman*\n\n" +
+          "Silahkan pilih aksi di bawah ini:\n" +
+          "- Tanya Islam Bebas\n" +
+          "- Download Murottal\n\n" +
+          "Klik salah satu tombol di bawah ini 👇",
+        footer: "PPTQ AL-ITQON",
+        mentions: [m.sender],
+        buttons: [
+          {
+            buttonId: "tanya_islam",
+            buttonText: { displayText: "🧕 Tanya Islam Bebas" },
+            type: 1,
+          },
+          {
+            buttonId: "download_murottal",
+            buttonText: { displayText: "🎧 Download Murottal" },
+            type: 1,
+          },
+        ],
+        headerType: 1,
+      });
+      return;
+    }
 
-        await sock.sendMessage(m.chat, {
-          text: "🧕 *Tanya Islam Bebas*\n\n" +
-            "Silahkan tanya apa saja seputar Islam, Al-Qur'an, Hadis, Fiqih, sejarah, dll.\n\n" +
-            "Contoh:\n" +
-            "- Apa itu Islam?\n" +
-            "- Hadis ke-5 Riyadhus Shalihin apa isinya?\n" +
-            "- Jelaskan makna ihsan menurut hadis Jibril.\n\n" +
-            "➜ Di *grup*, selama mode ini aktif, setiap pesan Anda akan dianggap sebagai pertanyaan (tanpa perlu mention).\n" +
-            "➜ Jika ingin berhenti dari mode ini, ketik: *Aibatal*.\n",
-        });
-        return;
-      }
-      if (btnId === "download_murottal") {
-  const rows = daftarSurah.map((s) => ({
-  title: `Surah ${s.latin}`,
-  description: `${s.arab} • ${s.arti}`,
-  id: `murottal_surah:${s.no}`,
-}));
+    // 5) Fitur Bermanfaat / Tools
+    if (selectedId === "tools_menu_info" || selectedId === "menu_tools") {
+      await sock.sendMessage(m.chat, {
+        text:
+          "*⚙️ FITUR BERMANFAAT (TOOLS)*\n\n" +
+          "*📄 Fitur PDF*\n" +
+          "📌 *Ubah Gambar ke PDF*\n" +
+          " - Kirimkan saya *gambar* di chat pribadi.\n" +
+          " - Jika di *grup*, kirim gambar + *tag saya*.\n\n" +
+          "📌 *Gabung beberapa PDF jadi 1*\n" +
+          " - Kirimkan saya *berkas PDF*.\n" +
+          " - Jika di grup, kirim PDF + *tag saya*.\n\n" +
+          "📌 *Ambil halaman tertentu dari PDF*\n" +
+          " - Kirim berkas PDF + instruksi halaman.\n\n" +
+          "*⏬ Fitur Download*\n" +
+          "📹 *Download Video Youtube, Facebook, Tiktok, Instagram, Ig Story.*\n" +
+          " - Perintahnya: !ytmp4 <link Youtube>.\n" +
+          " - Perintahnya: !fb <link Facebook>.\n" +
+          " - Perintahnya: !tt <link Tiktok>.\n" +
+          " - Perintahnya: !ig <link Instagram>.\n" +
+          " - Perintahnya: !igstory <link igstory>.\n" +
+          "🎧 *Download Audio Youtube, Audio Tiktok,.*\n" +
+          " - Perintahnya: !ytmp3 <link Youtube>.\n" +
+          " - Perintahnya: !ttmp3 <link Tiktok>.\n" +
+          "_Silakan mulai dengan mengirim gambar, PDF & link sesuai kebutuhan._",
+      });
+      return;
+    }
 
-  const params = {
-    title: "Pilih Surah",
-    sections: [
-      {
-        title: "📖 Daftar Surah Al-Qur'an",
-        rows,
-      },
-    ],
-  };
+    if (selectedId && selectedId.startsWith("murottal_surah:")) {
+      const surah = selectedId.split(":")[1];
 
-  await sendButtonMsg(
-    sock,
-    m.chat,
-    {
+      await handleQuranCommand(
+        sock,
+        m.chat,
+        `!audio ${surah}`,
+        m
+      );
+      return;
+    }
+  } catch (e) {
+    console.error("Error interactiveResponseMessage PPTQ/Hafalan:", e);
+  }
+}
+
+// =====================================================
+// 3. HANDLE KLIK TOMBOL QUICK REPLY (buttonsResponse)
+// =====================================================
+if (msg.message?.buttonsResponseMessage) {
+  const btn = msg.message.buttonsResponseMessage;
+  const btnId = btn.selectedButtonId || btn.selectedDisplayText;
+
+  console.log("Button clicked:", btnId);
+
+  // delegasi ke handler Text→PDF
+  const textPdfHandled = await handleTextPdfButton(sock, m, btnId);
+  if (textPdfHandled) return;
+
+  // Tombol khusus: SEMUA MENU
+  if (btnId === "all_menu") {
+    return handleAllMenu(sock, m);
+  }
+
+  // Sub-menu PPTQ
+  if (btnId === "pptq_struktur") return sendStruktur(sock, m);
+  if (btnId === "pptq_visimisi") return sendVisiMisi(sock, m);
+  if (btnId === "pptq_profil") return sendProfil(sock, m);
+
+  // Sub-menu Ketahfidzan
+  if (btnId === "hafalan_lihat") return startHafalanFlow(sock, m.chat);
+  if (btnId === "hafalan_daftar_ujian")
+    return handleRekapUjianCommand(sock, m.chat, "5");
+  if (btnId === "hafalan_program")
+    return sendProgramKetahfidzan(sock, m.chat);
+
+  // Sub-menu Menu Islam
+  if (btnId === "tanya_islam") {
+    if (m.isGroup) {
+      const key = `${m.chat}:${m.sender}`;
+      islamModeSessions.set(key, {
+        startedAt: Date.now(),
+        lastActivity: Date.now(),
+      });
+    }
+
+    await sock.sendMessage(m.chat, {
+      text:
+        "🧕 *Tanya Islam Bebas*\n\n" +
+        "Silahkan tanya apa saja seputar Islam, Al-Qur'an, Hadis, Fiqih, sejarah, dll.\n\n" +
+        "Contoh:\n" +
+        "- Apa itu Islam?\n" +
+        "- Hadis ke-5 Riyadhus Shalihin apa isinya?\n" +
+        "- Jelaskan makna ihsan menurut hadis Jibril.\n\n" +
+        "➜ Di *grup*, selama mode ini aktif, setiap pesan Anda akan dianggap sebagai pertanyaan.\n" +
+        "➜ Jika ingin berhenti, ketik: *Aibatal*.\n",
+    });
+    return;
+  }
+
+  if (btnId === "download_murottal") {
+    const rows = daftarSurah.map((s) => ({
+      title: `Surah ${s.latin}`,
+      description: `${s.arab} • ${s.arti}`,
+      id: `murottal_surah:${s.no}`,
+    }));
+
+    const params = {
+      title: "Pilih Surah",
+      sections: [
+        {
+          title: "📖 Daftar Surah Al-Qur'an",
+          rows,
+        },
+      ],
+    };
+
+    await sendButtonMsg(sock, m.chat, {
       text:
         "🎧 *Download Murottal*\n\n" +
         "⏭️Silakan pilih surah melalui tombol di bawah ini.",
@@ -482,53 +481,53 @@ module.exports = async function (sock, m, msg, store, aiService) {
         },
       ],
       headerType: 1,
-    },
-    {}
-  );
-
-  return;
+    });
+    return;
   }
 }
-    // =====================================================
-    // 3b. DELEGASI TOMBOL TEXT→PDF
-    // =====================================================
-    const textPdfHandledBtn = await handleTextPdfResponse(sock, m);
-    if (textPdfHandledBtn) return;
-   }
-    // =====================================================
-    // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1,2,3)
-    // =====================================================
-    if (["1", "2", "3", "4", "5", "6"].includes(lcText)) {
-      if (lcText === "1") return sendStruktur(sock, m);
-      if (lcText === "2") return sendVisiMisi(sock, m);
-      if (lcText === "3") return sendProfil(sock, m);
-      if (lcText === "4") return startHafalanFlow(sock, m.chat);
-      if (lcText === "5") return handleRekapUjianCommand(sock, m.chat, "5");
-      if (lcText === "6") return sendProgramKetahfidzan(sock, m.chat);
-    }
-    // =============================
-    // 5. DOWNLOADER COMMANDS
-    // =============================
-    const dlHandled = await handleDownloaderCommand(sock, m, text, msg);
-    if (dlHandled) return;
 
-    // =============================
-    // 6. MUROTTAL (!audio ...)
-    // =============================
-    const qoriHandled = await handleQoriCommand(sock, m.chat, text);
-    if (qoriHandled) return;
+// =====================================================
+// 3b. DELEGASI TOMBOL TEXT→PDF (TEXT BIASA)
+// =====================================================
+const textPdfHandledBtn = await handleTextPdfResponse(sock, m);
+if (textPdfHandledBtn) return;
 
-    if (/^!audio\b/i.test(lcText)) {
-      const handled = await handleQuranCommand(sock, m.chat, text, m);
-      if (handled) return;
-    }
-    // =============================
-    // 7. TEXT → PDF (mulai sesi)
-    // =============================
-    if (/^!textpdf\b/i.test(text || "")) {
-      const started = await handleTextPdfEntry(sock, m);
-      if (started) return;
-    }
+// =====================================================
+// 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1–6)
+// =====================================================
+if (["1", "2", "3", "4", "5", "6"].includes(lcText)) {
+  if (lcText === "1") return sendStruktur(sock, m);
+  if (lcText === "2") return sendVisiMisi(sock, m);
+  if (lcText === "3") return sendProfil(sock, m);
+  if (lcText === "4") return startHafalanFlow(sock, m.chat);
+  if (lcText === "5") return handleRekapUjianCommand(sock, m.chat, "5");
+  if (lcText === "6") return sendProgramKetahfidzan(sock, m.chat);
+}
+
+// =============================
+// 5. DOWNLOADER COMMANDS
+// =============================
+const dlHandled = await handleDownloaderCommand(sock, m, text, msg);
+if (dlHandled) return;
+
+// =============================
+// 6. MUROTTAL (!audio ...)
+// =============================
+const qoriHandled = await handleQoriCommand(sock, m.chat, text);
+if (qoriHandled) return;
+
+if (/^!audio\b/i.test(lcText)) {
+  const handled = await handleQuranCommand(sock, m.chat, text, m);
+  if (handled) return;
+}
+
+// =============================
+// 7. TEXT → PDF (mulai sesi)
+// =============================
+if (/^!textpdf\b/i.test(text || "")) {
+  const started = await handleTextPdfEntry(sock, m);
+  if (started) return;
+}
     // =============================
     // 7. LAPOR PEKANAN
     // =============================
