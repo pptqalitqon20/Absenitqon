@@ -1,39 +1,54 @@
 // naze.js - Router khusus BOT PPTQ AL-ITQON
-
 // ==== END INIT ====
 const { handleMenu } = require("./lib/menu");
 const { handleAllMenu } = require("./lib/allmenu");
 const { sendButtonMsg } = require("./lib/sendButton");
 const { handleConverter } = require('./handlers/converterHandler');
+//Ai
 const { handleAIQuery } = require("./handlers/aiHandler");
+//PPTQ
 const { sendStruktur, sendVisiMisi, sendProfil } = require("./lib/pptq");
+//Downloader
 const { handleDownloaderCommand } = require('./lib/downloader');
+//Reaksi
 const { getReactionPrompt } = require("./prompt");
+//daftar Surah
 const daftarSurah = require("./data/surah");
+
+//LihatHafalan
 const {
   startHafalanFlow,
   handleHafalanReply,
   handleHafalanSelection,
   sendProgramKetahfidzan,
 } = require("./lib/hafalan");
+
+//LaporanPekanan
 const {
   startLaporPekananFlow,
   handleLaporPekananListSelection,
   handleLaporPekananTextReply,
 } = require("./lib/laporPekananWa");
+
+//rekapUjian
 const { handleRekapUjianCommand } = require("./lib/rekapUjian");
 const {
   handleQuranCommand,
   handleQoriCommand,
 } = require('./handlers/quranHandler');
-// 🔧 Handler PDF (image → PDF, gabung PDF, dsb)
+
+//hitamkan foto
 const { handleGrayscaleImage } = require("./lib/handleGrayscale");
+
+//imageToPdf
 const {
   handleImageToPDFCommand,
   handleImageToPDF,
   hasActivePdfSession,
   getSessionKey: getPdfSessionKey,
 } = require("./handlers/imageToPdfHandler");
+
+//pdfMerge
 const {
   handlePdfMerge,
   handlePdfMergeCommand,
@@ -41,20 +56,32 @@ const {
   hasActivePdfMergeSession
 } = require('./handlers/pdfMergeHandler');
 
+//pdfExtrak
 const {
   startPdfExtractFlow,
   handlePdfExtractCommand,
   hasActiveExtractSession
 } = require('./handlers/pdfExtractHandler');
 
+//wordToPdf
 const {
   handleWordToPdf,
   handleWordToPdfCommand,
   hasActiveWordSession,
 } = require('./handlers/wordToPdfHandler');
+
+//pdfToWord
 const {
   startPdfToWord
 } = require('./handlers/pdfToWordHandler');
+
+//textPdfHnadler
+const {
+  handleTextPdfEntry,
+  handleIncomingText,
+  handleTextPdfButton,    
+  handleTextPdfResponse
+} = require('./handlers/textPdfHandler'); // sesuaikan path
 const islamModeSessions = new Map();
 
 // Normalize JID / LID ke bentuk "bare" biar gampang dibandingkan
@@ -364,9 +391,11 @@ module.exports = async function (sock, m, msg, store, aiService) {
     if (msg.message?.buttonsResponseMessage) {
       const btn = msg.message.buttonsResponseMessage;
       const btnId = btn.selectedButtonId || btn.selectedDisplayText;
-
       console.log("Button clicked:", btnId);
-
+      
+      // delegasi ke handler Text→PDF
+      const textPdfHandled = await handleTextPdfButton(sock, m, btnId);
+      if (textPdfHandled) return;
       // Tombol khusus: SEMUA MENU
       if (btnId === "all_menu") {
         return handleAllMenu(sock, m);
@@ -461,6 +490,12 @@ module.exports = async function (sock, m, msg, store, aiService) {
   }
 }
     // =====================================================
+    // 3b. DELEGASI TOMBOL TEXT→PDF
+    // =====================================================
+    const textPdfHandledBtn = await handleTextPdfResponse(sock, m);
+    if (textPdfHandledBtn) return;
+   }
+    // =====================================================
     // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1,2,3)
     // =====================================================
     if (["1", "2", "3", "4", "5", "6"].includes(lcText)) {
@@ -487,7 +522,13 @@ module.exports = async function (sock, m, msg, store, aiService) {
       const handled = await handleQuranCommand(sock, m.chat, text, m);
       if (handled) return;
     }
-
+    // =============================
+    // 7. TEXT → PDF (mulai sesi)
+    // =============================
+    if (/^!textpdf\b/i.test(text || "")) {
+      const started = await handleTextPdfEntry(sock, m);
+      if (started) return;
+    }
     // =============================
     // 7. LAPOR PEKANAN
     // =============================
@@ -495,12 +536,18 @@ module.exports = async function (sock, m, msg, store, aiService) {
       await startLaporPekananFlow(sock, m.chat);
       return;
     }
-
     // =============================
     // 8. HANDLE LAPOR PEKANAN TEXT REPLY
     // =============================
     const laporHandledText = await handleLaporPekananTextReply(sock, m);
     if (laporHandledText) return;
+    // =============================
+    // 10. TEXT → PDF (input teks untuk preview)
+    // =============================
+    if (m.text && m.text.trim()) {
+      const textPdfHandledInput = await handleIncomingText(sock, m);
+      if (textPdfHandledInput) return;
+     }
     // word to pdf
     const handledWordCmd = await handleWordToPdfCommand(
       sock,
