@@ -11,7 +11,8 @@ const { sendStruktur, sendVisiMisi, sendProfil } = require("./lib/pptq");
 //Downloader
 const { handleDownloaderCommand } = require('./lib/downloader');
 //Reaksi
-const { getReactionPrompt } = require("./prompt");
+const { getReactionSticker } = require("./prompt");
+const path = require("path");
 //daftar Surah
 const daftarSurah = require("./data/surah");
 
@@ -120,55 +121,41 @@ module.exports = async function (sock, m, msg, store, aiService) {
     }
 
     // ==========================
-    // 2️⃣ AUTO REACTION SEDERHANA
+    // 1️⃣ DETEKSI PESAN DARI CHANNEL/NEWSLETTER
     // ==========================
-    try {
-      console.log("🔁 [AUTO-REACT] Pesan diterima:", text);
-      console.log("DEBUG REACT CHECK", {
-        text,
-        remoteJid: messageKey?.remoteJid,
-        id: messageKey?.id,
-        stanzaId: messageKey?.stanzaId,
-        fullKey: messageKey
-      });
-      // kirim react hanya jika:
-      // - ada teks
-      // - bukan command
-      // - punya key yang valid (remoteJid & id)
-      if (
-        text &&
-        !/^[.!/#]/.test(text) &&
-        messageKey &&
-        messageKey.remoteJid &&
-        messageKey.id
-      ) {
-        const emoji = getReactionPrompt(text);
-        console.log("🔁 [AUTO-REACT] Emoji terpilih:", emoji);
+    const isNewsletter = chatId.endsWith("@newsletter");
 
-        if (emoji) {
-          await sock.sendMessage(chatId, {
-            react: {
-              text: emoji,
-              key: messageKey,
-            },
-          });
-          console.log("✅ [AUTO-REACT] React terkirim.");
-        } else {
-          console.log("ℹ️ [AUTO-REACT] Tidak ada emoji yang dipilih.");
-        }
-
-      } else {
-        console.log(
-          "ℹ️ [AUTO-REACT] Dilewati (kosong/command/tidak punya key yang valid)."
-        );
-      }
-    } catch (e) {
-      console.warn(
-        "⚠️ [AUTO-REACT] Gagal mengirim reaksi:",
-        e.message || e
-      );
+    if (isNewsletter) {
+      console.log("📬 [NEWSLETTER] Pesan dari channel, dilewati total.");
+      return; // Hentikan eksekusi untuk newsletter
     }
 
+  // ==========================
+  // 2️⃣ AUTO REACTION SEDERHANA
+  // ==========================
+  let autoReacted = false;
+  try {
+    if (
+      text &&
+      !isCommand &&
+      messageKey?.id
+    ) {
+      const stickerPath = getReactionSticker(text);
+
+      if (stickerPath) {
+        await sock.sendMessage(
+          m.chat,
+          { sticker: { url: stickerPath } },
+          { quoted: msg }
+       );
+
+        autoReacted = true; // ⬅️ PENTING
+        console.log("✅ [AUTO-REACT] Stiker terkirim");
+    }
+  }
+} catch (e) {
+  console.warn("⚠️ [AUTO-REACT] Error:", e);
+}
     // ==============================
     // 0. MODE ISLAM (SESSION GROUP)
     // ==============================
@@ -767,6 +754,11 @@ if (/^!textpdf\b/i.test(text || "")) {
     // 13. AI (TANYA ISLAM / UMUM)
     // =============================
     if (aiService) {
+      // ⛔ JANGAN JAWAB AI JIKA SUDAH ADA AUTO-REACTION
+       if (autoReacted) {
+         console.log("🤐 [AI] Dilewati karena sudah auto-react");
+         return;
+      }
       const textNow = (m.text || lcText || "").trim();
       if (!textNow) return;
 
