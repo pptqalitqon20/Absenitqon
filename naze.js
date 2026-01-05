@@ -109,17 +109,6 @@ module.exports = async function (sock, m, msg, store, aiService) {
     const sessionKey = `${m.chat}:${m.sender}`;
     const chatId = m.chat || m.key?.remoteJid || "";
     const messageKey = m.key || null;
-
-    // ==========================
-    // 1️⃣ DETEKSI PESAN DARI CHANNEL/NEWSLETTER
-    // ==========================
-    const isNewsletter = chatId.endsWith("@newsletter");
-
-    if (isNewsletter) {
-      console.log("📬 [NEWSLETTER] Pesan dari channel, dilewati total.");
-      return; // Hentikan eksekusi untuk newsletter
-    }
-
     // ==========================
     // 1️⃣ DETEKSI PESAN DARI CHANNEL/NEWSLETTER
     // ==========================
