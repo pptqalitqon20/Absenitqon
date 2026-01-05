@@ -1,5 +1,5 @@
 // prompt.js
-
+const path = require("path");
 /**
  * Prompt utama untuk AI “Tanya Islam” di bot.
  */
@@ -74,79 +74,45 @@ Selalu hadirkan adab, kelembutan, dan semangat mengajak kepada kebaikan dalam se
 /**
  * Pilih satu emoji reaksi berdasarkan isi teks (rule based, tanpa AI).
  */
-function getReactionPrompt(text) {
+function getReactionSticker(text) {
   const t = (text || "").toLowerCase().trim();
-  if (!t) return "👍";
+  if (!t) return null; // jangan kirim apa-apa kalau kosong
 
-  // syukur / terima kasih
   if (
     t.includes("terima kasih") ||
     t.includes("makasih") ||
-    t.includes("makasi") ||
     t.includes("syukron") ||
-    t.includes("syukran") ||
-    t.includes("jazakallahu") ||
-    t.includes("jazakumullahu")
+    t.includes("jazakallahu")
   ) {
-    return "🙏";
+    return path.join(__dirname, "./stickers/syukur.webp");
   }
 
-  // tawa / bercanda
-  if (
-    t.includes("wkwk") ||
-    t.includes("haha") ||
-    t.includes("hehe") ||
-    t.includes("🤣") ||
-    t.includes("😂")
-  ) {
-    return "😂";
+  if (t.includes("wkwk") || t.includes("haha") || t.includes("hehe") || t.includes("😂")) {
+    return path.join(__dirname, "./stickers/lucu.webp");
   }
 
-  // kagum / apresiasi
-  if (
-    t.includes("masya allah") ||
-    t.includes("masyaallah") ||
-    t.includes("subhanallah") ||
-    t.includes("keren") ||
-    t.includes("mantap") ||
-    t.includes("bagus") ||
-    t.includes("hebat")
-  ) {
-    return "❤️";
+  if (t.includes("masyaallah") || t.includes("masya allah") || t.includes("keren") || t.includes("luar biasa") || t.includes("mantap")) {
+    return path.join(__dirname, "./stickers/takjub.webp");
   }
 
-  // sedih / belasungkawa
-  if (
-    t.includes("innalillahi") ||
-    t.includes("inna lillahi") ||
-    t.includes("sedih") ||
-    t.includes("duka") ||
-    t.includes("meninggal") ||
-    t.includes("wafat")
-  ) {
-    return "😢";
+  if (t.includes("innalillahi") || t.includes("sedih") || t.includes("meninggal dunia") || t.includes("wafat")) {
+    return path.join(__dirname, "./stickers/meninggal.webp");
   }
 
-  // marah / kesal
-  if (
-    t.includes("kesal") ||
-    t.includes("kesel") ||
-    t.includes("marah") ||
-    t.includes("jengkel")
-  ) {
-    return "😡";
+  if (t.includes("in syaa allah") || t.includes("kami usahakan")) {
+    return path.join(__dirname, "./stickers/in syaa allah.webp");
   }
 
-  // kaget / takjub
-  if (t.includes("serius") || t.includes("masa sih") || t.includes("serem")) {
-    return "😮";
+  if (t.includes("assalamualaikum") || t.includes("assalamu'alaikum") || t.includes("salam")) {
+    return path.join(__dirname, "./stickers/salam.webp");
   }
 
-  // default
-  return "👍";
+  // tidak ada match → jangan kirim stiker
+  return null;
 }
 
 module.exports = {
   getSystemPrompt,
-  getReactionPrompt,
+  getReactionSticker,
 };
+
