@@ -50,7 +50,7 @@ async function serialize(naze, msg, store) {
   m.raw = msg;
 
   // ✅ BARIS PENTING (FIX AUTO-REACT, DELETE, EDIT, DLL)
- // m.key = msg.key;
+  m.key = msg.key;
 
   return m;
 }
