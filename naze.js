@@ -4,6 +4,7 @@ const { handleMenu } = require("./lib/menu");
 const { handleAllMenu } = require("./lib/allmenu");
 const { sendButtonMsg } = require("./lib/sendButton");
 const { handleConverter } = require('./handlers/converterHandler');
+const { handleJadwalSholat } = require('./handlers/sholatHandler');
 //Ai
 const { handleAIQuery } = require("./handlers/aiHandler");
 //PPTQ
@@ -496,7 +497,8 @@ if (/^!audio\b/i.test(lcText)) {
   const handled = await handleQuranCommand(sock, m.chat, text, m);
   if (handled) return;
 }
-
+const sholatHandled = await handleJadwalSholat(sock, m, text);
+if (sholatHandled) return;
 // =============================
 // 7. TEXT → PDF (mulai sesi)
 // =============================
