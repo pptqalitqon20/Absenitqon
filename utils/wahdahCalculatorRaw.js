@@ -301,3 +301,4 @@ WahdahCalculatorRaw.DEGREES_TO_RADIANS = Math.PI / 180;
 WahdahCalculatorRaw.RADIANS_TO_DEGREES = 180 / Math.PI;
 
 module.exports = WahdahCalculatorRaw;
+
