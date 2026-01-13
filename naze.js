@@ -467,8 +467,9 @@ if (msg.message?.buttonsResponseMessage) {
 // 3b. DELEGASI TOMBOL TEXT→PDF (TEXT BIASA)
 // =====================================================
 const textPdfHandledBtn = await handleTextPdfResponse(sock, m);
-if (textPdfHandledBtn) return;
-
+    if (textPdfHandledBtn) return;
+const laporHandledText = await handleLaporPekananTextReply(sock, m);
+    if (laporHandledText) return;
 // =====================================================
 // 4. OPSIONAL: DUKUNG PERINTAH ANGKA LANGSUNG (1–6)
 // =====================================================
@@ -513,11 +514,7 @@ if (/^!textpdf\b/i.test(text || "")) {
       await startLaporPekananFlow(sock, m.chat);
       return;
     }
-    // =============================
-    // 8. HANDLE LAPOR PEKANAN TEXT REPLY
-    // =============================
-    const laporHandledText = await handleLaporPekananTextReply(sock, m);
-    if (laporHandledText) return;
+    
     // =============================
     // 10. TEXT → PDF (input teks untuk preview)
     // =============================
