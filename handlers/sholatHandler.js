@@ -1,6 +1,6 @@
 const moment = require('moment-timezone');
 const axios = require('axios');
-const WahdahCalc = require("../utils/wahdahAdapter"); // adapter kamu
+const Wahdah = require("../utils/wahdahAdapter");
 
 async function handleJadwalSholat(sock, m, text) {
     const chat = m.chat;
