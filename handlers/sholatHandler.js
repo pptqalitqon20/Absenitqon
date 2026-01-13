@@ -1,6 +1,6 @@
-const { Coordinates, CalculationMethod, PrayerTimes } = require('adhan');
 const moment = require('moment-timezone');
 const axios = require('axios');
+const WahdahCalc = require('./wahdahCalculator'); // adapter kamu
 
 async function handleJadwalSholat(sock, m, text) {
     const chat = m.chat;
@@ -42,23 +42,9 @@ async function handleJadwalSholat(sock, m, text) {
                 displayName = searchRes.data[0].display_name;
             }
 
-            // 2. HITUNG JADWAL DENGAN RUMUS WAHDAH
-            const coords = new Coordinates(parseFloat(lat), parseFloat(lon));
-            const params = CalculationMethod.Other();
-            params.fajrAngle = 17.5; // Kriteria Wahdah
-            params.ishaAngle = 18.0; // Kriteria Wahdah
-            
-            // Ihtiyat (Menit Pengaman) sesuai standar Wahdah
-            params.methodAdjustments = { 
-                dhuhr: 4, 
-                maghrib: 2,
-                fajr: 2,
-                asr: 2,
-                isha: 2 
-            };
-
+            // 2. HITUNG JADWAL DENGAN KALKULATOR WAHDAH
             const date = new Date();
-            const p = new PrayerTimes(coords, date, params);
+            const jadwal = WahdahCalc.calculate(parseFloat(lat), parseFloat(lon), date);
             
             // Format waktu ke WITA (Asia/Makassar)
             const format = (t) => moment(t).tz('Asia/Makassar').format('HH:mm');
@@ -67,11 +53,12 @@ async function handleJadwalSholat(sock, m, text) {
 📍 *Lokasi:* ${displayName}
 📅 *Tanggal:* ${moment().format('DD/MM/YYYY')}
 
-🌅 *Subuh:* ${format(p.fajr)}
-🌞 *Dzuhur:* ${format(p.dhuhr)}
-🌥️ *Ashar:* ${format(p.asr)}
-🌆 *Maghrib:* ${format(p.maghrib)}
-🌃 *Isya:* ${format(p.isha)}
+🌅 *Imsak:* ${format(jadwal.imsak)}
+🌅 *Subuh:* ${format(jadwal.fajr)}
+🌞 *Dzuhur:* ${format(jadwal.dhuhr)}
+🌥️ *Ashar:* ${format(jadwal.asr)}
+🌆 *Maghrib:* ${format(jadwal.maghrib)}
+🌃 *Isya:* ${format(jadwal.isha)}
 
 _Waktu sudah termasuk Ihtiyat (pengaman)_`;
 
