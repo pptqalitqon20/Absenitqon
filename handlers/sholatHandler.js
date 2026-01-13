@@ -49,7 +49,7 @@ async function handleJadwalSholat(sock, m, text) {
             // Format waktu ke WITA (Asia/Makassar)
             const format = (t) => moment(t).tz('Asia/Makassar').format('HH:mm');
 
-            const hasil = `📊 *JADWAL SHOLAT (WAHDAH)*
+            const hasil = `📊 *JADWAL SHOLAT (WAHDAH ISLAMIYYAH)*
 📍 *Lokasi:* ${displayName}
 📅 *Tanggal:* ${moment().format('DD/MM/YYYY')}
 
@@ -60,7 +60,8 @@ async function handleJadwalSholat(sock, m, text) {
 🌆 *Maghrib:* ${format(jadwal.maghrib)}
 🌃 *Isya:* ${format(jadwal.isha)}
 
-_Waktu sudah termasuk Ihtiyat (pengaman)_`;
+========================================
+_Sudut Subuh: 17.5° | Sudut Isya: 18° | Ihtiyat: Dzuhur +4 menit, Maghrib +2 menit_`;
 
             await sock.sendMessage(chat, { text: hasil });
             return true;
