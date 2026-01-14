@@ -225,12 +225,11 @@ async function startBot() {
     }
 
     if (connection === "open") {
-      console.log(
-        chalk.green("📱 BOT TERHUBUNG SEBAGAI:"),
-        sock.user?.id
-        initSholatReminder(sock);
-      );
-    }
+  console.log(chalk.green("📱 BOT TERHUBUNG SEBAGAI:"), sock.user?.id);
+  
+  // Panggil fungsi pengingat di luar console.log
+  initSholatReminder(sock); 
+}
 
     if (connection === "close") {
       const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
