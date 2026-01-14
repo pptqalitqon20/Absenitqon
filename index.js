@@ -7,6 +7,7 @@ const qrcode = require("qrcode-terminal");
 const NodeCache = require("node-cache");
 const { Boom } = require("@hapi/boom");
 const { MongoClient } = require("mongodb");
+const { initSholatReminder } = require('./utils/sholatReminder');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -227,6 +228,7 @@ async function startBot() {
       console.log(
         chalk.green("📱 BOT TERHUBUNG SEBAGAI:"),
         sock.user?.id
+        initSholatReminder(sock);
       );
     }
 
