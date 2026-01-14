@@ -6,10 +6,10 @@ const WahdahCalc = require("./wahdahAdapter");
 // Masukkan JID grup dan koordinatnya di sini
 const LIST_GRUP_SHOLAT = [
     {
-        jid: "120363420619018107@g.us", // Ganti dengan JID grup Anda
+        jid: "120363257401506274@g.us", // Ganti dengan JID grup Anda
         lat: -5.1738,           // Contoh: Makassar
         lon: 119.5373,
-        name: "Makassar"
+        name: "Ba'do'-Ba'do', Pattallassang, Gowa, Sulawesi Selatan, Sulawesi, 90562, Indonesia"
     },
     // Tambahkan grup lain jika ada
 ];
@@ -45,7 +45,9 @@ function initSholatReminder(sock) {
                     const pesan = `🔔 *PENGINGAT SHOLAT (${grup.name})*\n\n` +
                         `Sepuluh menit lagi menuju waktu *${sholat.nama}* untuk wilayah ${grup.name} dan sekitarnya.\n\n` +
                         `⏰ Waktu ${sholat.nama}: *${moment(sholat.waktu).tz(tz).format('HH:mm')}*\n\n` +
-                        `_“Sesungguhnya sholat itu adalah fardhu yang ditentukan waktunya atas orang-orang yang beriman.” (QS. An-Nisa: 103)_`;
+                        `_“Sesungguhnya sholat itu adalah fardhu yang ditentukan waktunya atas orang-orang yang beriman.” (QS. An-Nisa: 103)_\n\n` + 
+                        `*📋Jadwal Diambil Langsung Dari Wahdah App*\n\n` +
+                        `*Kalau Mau Cek Jadwal Daerah Lain Ketik !sholat nama daerah,misal:* _!shalat Ba'do-Ba'do Pattallassang Gowa_`;
 
                     await sock.sendMessage(grup.jid, { text: pesan });
                 }
