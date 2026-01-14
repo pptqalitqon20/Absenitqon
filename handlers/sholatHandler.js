@@ -1,74 +1,98 @@
 const moment = require('moment-timezone');
 const axios = require('axios');
-const Wahdah = require("../utils/wahdahAdapter");
+const WahdahCalc = require("../utils/wahdahAdapter");
 
 async function handleJadwalSholat(sock, m, text) {
     const chat = m.chat;
     const lcText = (text || "").toLowerCase().trim();
-
-    // 1. CEK JIKA USER MENGIRIM PESAN LOKASI (SHARE LOCATION)
     const locationMessage = m.message?.locationMessage || m.message?.liveLocationMessage;
-    
+
     if (locationMessage || lcText.startsWith('!sholat')) {
         try {
             let lat, lon, displayName;
+            let targetDate = new Date(); // Default hari ini
 
+            // 1. CEK APAKAH USER MINTA JADWAL BESOK
+            if (lcText.includes("besok")) {
+                targetDate = moment().add(1, 'days').toDate();
+            }
+
+            // 2. AMBIL KOORDINAT
             if (locationMessage) {
-                // JIKA DARI SHARE LOCATION
                 lat = locationMessage.degreesLatitude;
                 lon = locationMessage.degreesLongitude;
                 
-                // Cari nama daerahnya lewat reverse geocoding
-                const revUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
-                const revRes = await axios.get(revUrl, { headers: { 'User-Agent': 'WahdahBot-AsistenUstadz' } });
+                const revRes = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, { 
+                    headers: { 'User-Agent': 'WahdahBot' },
+                    timeout: 5000 
+                });
                 displayName = revRes.data?.display_name || "Lokasi Anda";
             } else {
-                // JIKA DARI TEKS !sholat
-                const daerah = lcText.replace('!sholat', '').trim();
+                // Bersihkan perintah "!sholat" dan kata "besok" untuk mengambil nama daerah
+                let daerah = lcText.replace('!sholat', '').replace('besok', '').trim();
+                
                 if (!daerah) {
-                    await sock.sendMessage(chat, { text: "Silakan masukkan nama kecamatan.\nContoh: *!sholat Pattallassang*" });
+                    await sock.sendMessage(chat, { text: "Contoh: *!sholat Makassar* atau *!sholat besok Jakarta*" });
                     return true;
                 }
 
-                const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(daerah)}&limit=1`;
-                const searchRes = await axios.get(searchUrl, { headers: { 'User-Agent': 'WahdahBot-AsistenUstadz' } });
+                const searchRes = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(daerah)}&limit=1`, { 
+                    headers: { 'User-Agent': 'WahdahBot' },
+                    timeout: 5000 
+                });
 
-                if (!searchRes.data || searchRes.data.length === 0) {
-                    await sock.sendMessage(chat, { text: "Kecamatan tidak ditemukan. Coba ketik lebih spesifik." });
+                if (!searchRes.data?.[0]) {
+                    await sock.sendMessage(chat, { text: "Lokasi tidak ditemukan. Coba ketik nama kecamatan/kota dengan benar." });
                     return true;
                 }
-                lat = searchRes.data[0].lat;
-                lon = searchRes.data[0].lon;
+                lat = parseFloat(searchRes.data[0].lat);
+                lon = parseFloat(searchRes.data[0].lon);
                 displayName = searchRes.data[0].display_name;
             }
 
-            // 2. HITUNG JADWAL DENGAN KALKULATOR WAHDAH
-            const date = new Date();
-            const jadwal = WahdahCalc.calculate(parseFloat(lat), parseFloat(lon), date);
+            // 3. PENENTUAN TIMEZONE OTOMATIS
+            let tz = "Asia/Makassar"; 
+            let labelTz = "WITA";
             
-            // Format waktu ke WITA (Asia/Makassar)
-            const format = (t) => moment(t).tz('Asia/Makassar').format('HH:mm');
+            if (lon < 110) {
+                tz = "Asia/Jakarta";
+                labelTz = "WIB";
+            } else if (lon > 127.5) {
+                tz = "Asia/Jayapura";
+                labelTz = "WIT";
+            }
 
-            const hasil = `📊 *JADWAL SHOLAT (WAHDAH ISLAMIYYAH)*
+            // 4. HITUNG JADWAL
+            const jadwal = WahdahCalc.calculate(lat, lon, targetDate, tz);
+            const formatTz = (t) => moment(t).tz(tz).format('HH:mm');
+
+            // 5. SUSUN PESAN
+            const tglString = moment(targetDate).tz(tz).format('DD/MM/YYYY');
+            const statusHari = lcText.includes("besok") ? " (ESOK HARI)" : "";
+
+            const hasil = `📊 *JADWAL SHOLAT WAHDAH${statusHari}*
 📍 *Lokasi:* ${displayName}
-📅 *Tanggal:* ${moment().format('DD/MM/YYYY')}
+📅 *Tanggal:* ${tglString}
+⏰ *Zona Waktu:* ${labelTz} (GMT${tz === "Asia/Jakarta" ? "+7" : tz === "Asia/Makassar" ? "+8" : "+9"})
 
-🌅 *Imsak:* ${format(jadwal.imsak)}
-🌅 *Subuh:* ${format(jadwal.fajr)}
-🌞 *Dzuhur:* ${format(jadwal.dhuhr)}
-🌥️ *Ashar:* ${format(jadwal.asr)}
-🌆 *Maghrib:* ${format(jadwal.maghrib)}
-🌃 *Isya:* ${format(jadwal.isha)}
+🌅 *Imsak:* ${formatTz(jadwal.imsak)}
+🌅 *Subuh:* ${formatTz(jadwal.fajr)}
+🌞 *Dzuhur:* ${formatTz(jadwal.dhuhr)}
+🌥️ *Ashar:* ${formatTz(jadwal.asr)}
+🌆 *Maghrib:* ${formatTz(jadwal.maghrib)}
+🌃 *Isya:* ${formatTz(jadwal.isha)}
 
-========================================
-_Sudut Subuh: 17.5° | Sudut Isya: 18° | Ihtiyat: Dzuhur +4 menit, Maghrib +2 menit_`;
+==================================
+_Sudut Subuh: 17.5° | Sudut Isya: 18°_
+_Ihtiyat: Dzuhur +4m, Maghrib +2m_
+_Ketik *!sholat besok [nama daerah]* untuk jadwal esok hari._`;
 
             await sock.sendMessage(chat, { text: hasil });
             return true;
 
         } catch (e) {
             console.error("ERROR SHOLAT HANDLER:", e);
-            await sock.sendMessage(chat, { text: "Terjadi kesalahan sistem saat mengambil jadwal." });
+            await sock.sendMessage(chat, { text: "Terjadi kesalahan teknis saat mengambil jadwal." });
             return true;
         }
     }
