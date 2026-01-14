@@ -7,8 +7,8 @@ const WahdahCalc = require("./wahdahAdapter");
 const LIST_GRUP_SHOLAT = [
     {
         jid: "120363420619018107@g.us", // Ganti dengan JID grup Anda
-        lat: -5.1476,           // Contoh: Makassar
-        lon: 119.4327,
+        lat: -5.1738,           // Contoh: Makassar
+        lon: 119.5373,
         name: "Makassar"
     },
     // Tambahkan grup lain jika ada
