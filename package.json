@@ -11,7 +11,7 @@
     "@distube/ytdl-core": "^4.16.12",
     "@hapi/boom": "^10.0.0",
     "@ilovepdf/ilovepdf-nodejs": "^0.3.1",
-    "adhan": "^4.4.3",
+    "node-cron": "latest"
     "axios": "^1.6.2",
     "baileys": "latest",
     "chalk": "^4.1.2",
