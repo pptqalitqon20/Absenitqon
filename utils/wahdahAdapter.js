@@ -1,16 +1,17 @@
 const WahdahRaw = require("./wahdahCalculatorRaw");
+const moment = require("moment-timezone");
 
-module.exports.calculate = (lat, lon, date = new Date()) => {
-
-    // ⚠️ PASTIKAN DATE ASLI JS
-    if (!(date instanceof Date)) {
-        date = new Date(date);
-    }
+module.exports.calculate = (lat, lon, date = new Date(), timezone = "Asia/Makassar") => {
+    
+    // PAKSA date menggunakan timezone target agar tidak ikut waktu server Render
+    // Kita buat string tanggal dari input, lalu bungkus dengan moment timezone
+    const dateStr = moment(date).format('YYYY-MM-DD HH:mm:ss');
+    const localDate = moment.tz(dateStr, timezone).toDate();
 
     const location = {
         latitude: lat,
         longitude: lon,
-        timezone: "Asia/Makassar"
+        timezone: timezone
     };
 
     const config = {
@@ -24,5 +25,5 @@ module.exports.calculate = (lat, lon, date = new Date()) => {
         ihtiyat_isha: 0
     };
 
-    return WahdahRaw.calculatePrayerTimes(location, date, config);
+    return WahdahRaw.calculatePrayerTimes(location, localDate, config);
 };
