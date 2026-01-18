@@ -58,7 +58,7 @@ function initSholatReminder(sock) {
                         `⏰ Waktu ${sholat.nama}: *${moment(sholat.waktu).tz(tz).format('HH:mm')}*\n\n` +
                         `_“Sesungguhnya sholat itu adalah fardhu yang ditentukan waktunya atas orang-orang yang beriman.” (QS. An-Nisa: 103)_\n\n` +
                         `*📋Jadwal Diambil Langsung Dari Wahdah App*\n` +
-                        `*Kalau Mau Cek Jadwal Daerah Lain Ketik !sholat nama daerah, misal:* \n👉🏻_!shalat Ba'do-Ba'do Pattallassang Gowa_`;
+                        `*Kalau Mau Cek Jadwal Daerah Lain Ketik !sholat nama daerah, misal:* \n👉🏻_!sholat Ba'do-Ba'do Pattallassang Gowa_`;
 
                     // kirim ke semua JID dalam array
                     for (const jid of grup.jid) {
